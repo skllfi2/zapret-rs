@@ -77,6 +77,7 @@ class ZapretApp:
             ("GameFilter", lambda: self.run_action("load_game_filter")),
             ("Clear Discord", lambda: self.run_action("clear_discord")),
             ("List Fakes", lambda: self.show_fakes()),
+            ("Restore Payload", lambda: self.run_action("restore_payloads")),
             ("IPSet Update", lambda: self.run_action("ipset_update")),
         ]
         grid_frame = tk.Frame(content, bg=COLORS["bg_card"])

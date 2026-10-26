@@ -142,6 +142,47 @@ class TestServiceManager(unittest.TestCase):
         self.assertTrue(r2["ok"])
         self.assertEqual(r2["missing"], [])
 
+    def test_restore_payloads(self):
+        import tempfile, shutil
+        from service_manager import restore_payloads
+        src = tempfile.mkdtemp(); dst = tempfile.mkdtemp()
+        try:
+            # обязательные + лишний не-.bin файл
+            for n in ["ACTIVE_DISCORD_UDP.bin", "ACTIVE_GAME_UDP.bin",
+                      "quic_initial_www_google_com.bin", "tls_clienthello_www_google_com.bin"]:
+                with open(os.path.join(src, n), "wb") as f: f.write(b"\x00" * 16)
+            with open(os.path.join(src, "winws.exe"), "wb") as f: f.write(b"MZ")
+            # в назначении уже лежит один файл — его перезаписывать нельзя
+            with open(os.path.join(dst, "ACTIVE_GAME_UDP.bin"), "wb") as f: f.write(b"MANUAL")
+            r = restore_payloads(dest_dir=dst, source_dir=src)
+            self.assertTrue(r["ok"], r)
+            self.assertIn("ACTIVE_DISCORD_UDP.bin", r["copied"])
+            self.assertIn("ACTIVE_GAME_UDP.bin", r["skipped"])  # не перезаписан
+            self.assertEqual(open(os.path.join(dst, "ACTIVE_GAME_UDP.bin"), "rb").read(), b"MANUAL")
+            self.assertFalse(os.path.exists(os.path.join(dst, "winws.exe")))  # только .bin
+            # повторный вызов — копировать нечего
+            r2 = restore_payloads(dest_dir=dst, source_dir=src)
+            self.assertEqual(r2["copied"], [])
+        finally:
+            shutil.rmtree(src, ignore_errors=True); shutil.rmtree(dst, ignore_errors=True)
+
+    def test_restore_payloads_same_dir_refused(self):
+        from service_manager import restore_payloads
+        r = restore_payloads(dest_dir="C:\\x", source_dir="C:\\x\\")
+        self.assertFalse(r["ok"])
+
+    def test_find_payload_source_env(self):
+        # ZAPRET_PAYLOADS_DIR имеет приоритет
+        import tempfile
+        from service_manager import find_payload_source
+        d = tempfile.mkdtemp()
+        try:
+            with open(os.path.join(d, "a.bin"), "wb") as f: f.write(b"x")
+            with mock.patch.dict("os.environ", {"ZAPRET_PAYLOADS_DIR": d}):
+                self.assertEqual(find_payload_source(), d)
+        finally:
+            import shutil; shutil.rmtree(d, ignore_errors=True)
+
     def test_hidden_cmd_get_bin(self):
         from service_manager import get_bin_path, hidden_cmd
         with mock.patch("service_manager.os.path.dirname", return_value="C:\\fake"):

@@ -342,14 +342,81 @@ def hidden_cmd(cmd_list, cwd=ORIG_DIR, timeout=30):
     except Exception as e:
         return {"ok": False, "stdout": "", "stderr": str(e)}
 
-def payloads_status():
+def find_payload_source():
+    """Ищем каталог с *.bin payload-файлами для восстановления.
+    Порядок: ZAPRET_PAYLOADS_DIR -> самый свежий AppWatch\Versions\<app>\*\bin."""
+    candidates = []
+    env = os.environ.get("ZAPRET_PAYLOADS_DIR")
+    if env:
+        candidates.append(env)
+    versions_root = os.path.join(os.environ.get("LOCALAPPDATA", ""), "AppWatch", "Versions")
+    if os.path.isdir(versions_root):
+        for app in os.listdir(versions_root):  # например zapretdiscordyoutube
+            app_root = os.path.join(versions_root, app)
+            if not os.path.isdir(app_root):
+                continue
+            subs = [os.path.join(app_root, s) for s in os.listdir(app_root)]
+            # ближайшую к настоящему версию — первой (1102, 1103, ...)
+            def _mtime(p):
+                try: return os.path.getmtime(p)
+                except OSError: return 0
+            for sub in sorted(subs, key=_mtime, reverse=True):
+                b = os.path.join(sub, "bin")
+                try:
+                    has_bin = os.path.isdir(b) and any(f.lower().endswith(".bin") for f in os.listdir(b))
+                except OSError:
+                    has_bin = False
+                if has_bin:
+                    candidates.append(b)
+                    break
+    for c in candidates:
+        if os.path.isdir(c):
+            return c
+    return None
+
+
+def restore_payloads(dest_dir=None, source_dir=None):
+    """Восстановление *.bin в bin/ рабочей копии (не перезаписывает существующие).
+    Нужно, если развёртывание скопировало bin не полностью: без .bin fake-стратегии
+    winws молча не работают."""
+    import shutil
+    dest = dest_dir or BIN_DIR
+    src = source_dir or find_payload_source()
+    if not src:
+        return {"ok": False, "stdout": "", "stderr": "Источник *.bin не найден. "
+                                                     "Задай ZAPRET_PAYLOADS_DIR или проверь архив версий."}
+    if os.path.abspath(src) == os.path.abspath(dest):
+        return {"ok": False, "stdout": "", "stderr": "Источник и назначение совпадают — нечего копировать."}
+    try:
+        os.makedirs(dest, exist_ok=True)
+        copied, skipped = [], []
+        for f in sorted(os.listdir(src)):
+            if not f.lower().endswith(".bin"):
+                continue
+            target = os.path.join(dest, f)
+            if os.path.exists(target):
+                skipped.append(f)      # никогда не перезаписываем: ACTIVE_* могли заменить вручную
+                continue
+            shutil.copy2(os.path.join(src, f), target)
+            copied.append(f)
+    except OSError as e:
+        return {"ok": False, "stdout": "", "stderr": str(e)}
+    pl = payloads_status(dest)
+    return {"ok": pl["ok"], "source": src, "dest": dest,
+            "copied": copied, "skipped": skipped,
+            "stdout": f"Скопировано {len(copied)}, пропущено (уже были) {len(skipped)}. {pl['stdout']}",
+            "stderr": pl.get("stderr", ""), "payloads": pl}
+
+
+def payloads_status(bin_dir=None):
     """Проверка fake-payload файлов (*.bin), на которые ссылается winws.exe.
     В рабочей копии их может не быть (лежат в архиве версий) — тогда fake-стратегии не работают."""
-    if not os.path.isdir(BIN_DIR):
-        return {"ok": False, "missing": [BIN_DIR], "total": 0,
-                "stderr": f"Каталог bin не найден: {BIN_DIR}"}
+    bin_dir = bin_dir or BIN_DIR
+    if not os.path.isdir(bin_dir):
+        return {"ok": False, "missing": [bin_dir], "total": 0,
+                "stderr": f"Каталог bin не найден: {bin_dir}"}
     try:
-        files = [f for f in os.listdir(BIN_DIR) if f.lower().endswith(".bin")]
+        files = [f for f in os.listdir(bin_dir) if f.lower().endswith(".bin")]
     except OSError as e:
         return {"ok": False, "missing": [], "total": 0, "stderr": str(e)}
     # Обязательные для работы десинхронизации (как в строке winws сервиса)
@@ -389,6 +456,8 @@ def run_service_action(action="status_zapret", arg="", **kwargs):
             return {"ok": True, "service": f"diag error: {e}"}
     if action == "payloads_status":
         return payloads_status()
+    if action == "restore_payloads":
+        return restore_payloads(**kwargs)
     if action == "status_zapret":
         return {"ok": True, "service": f"winws.exe running={winws_is_running()}, service={query_status()}"}
     if action == "replace_active_fakes":

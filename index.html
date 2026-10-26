@@ -75,6 +75,8 @@ body[data-theme="light"] select{background:#fff;color:#222;border-color:#ccc}
   <button class="action" onclick="post('api/service_uninstall')" data-i18n="service_uninstall">Uninstall Service</button>
   <button class="action" onclick="loadFakes()" data-i18n="list_fakes">Список fakes</button>
   <button class="action" onclick="replaceFakes()" data-i18n="replace_fakes">Replace Active Fake</button>
+  <button class="action" onclick="showOut('api/payloads','fakes-out')" data-i18n="payloads_check">Проверка payload</button>
+  <button class="action" onclick="post('api/restore_payloads')" data-i18n="payloads_restore">Восстановить payload</button>
   <pre id="fakes-out"></pre>
 </section>
 
@@ -204,6 +206,7 @@ const I18N={
       service_title:'Windows Service (SCM)',service_desc:'Manages the zapret service via SCM (pywin32), no service.bat.',
       service_install:'Install Service',service_uninstall:'Uninstall Service',
       list_fakes:'List Fakes',replace_fakes:'Replace Active Fake',
+      payloads_check:'Check Payloads',payloads_restore:'Restore Payloads',
       diag_title:'Diagnostics',diag_desc:'Service, winws.exe, admin rights.',
       diag_run:'Run Checks',clear_discord:'Clear Discord Cache',tcp_timestamps:'TCP Timestamps',
       admin_use:'Admin / UAC',run_tests:'Run Tests',hosts_check:'Hosts Check',

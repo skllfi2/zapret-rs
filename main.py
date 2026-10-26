@@ -59,6 +59,11 @@ def fakes(): return jsonify(run_service_action("list_fakes"))
 @app.route("/api/payloads")
 def payloads(): return jsonify(run_service_action("payloads_status"))
 
+@app.route("/api/restore_payloads", methods=["POST"])
+def restore_payloads():
+    if _check_csrf(): return _check_csrf()
+    return jsonify(run_service_action("restore_payloads"))
+
 @app.route("/api/game_filter")
 def game_filter(): return jsonify(run_service_action("load_game_filter"))
 
