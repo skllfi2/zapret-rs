@@ -31,13 +31,17 @@ except Exception as e:
     check(False, f"main.py ошибка: {e}")
 
 print("\n=== Конечные точки (endpoints) ===")
-content = open(os.path.join(SIMPLE,"main.py")).read()
+content = open(os.path.join(SIMPLE,"main.py"), encoding="utf-8").read()
 for ep in ["/api/update", "/api/status", "/api/start", "/api/stop", "/api/diag", "/api/lists"]:
-    check(f"@app.route(\"{ep}\")" in content or f"'{ep}'" in content, f"endpoint {ep}")
+    check(f'"{ep}"' in content, f"endpoint {ep}")
+
+print("\n=== Мутирующие эндпоинты защищены CSRF ===")
+check('X-Zapret-Token' in content, "проверка X-Zapret-Token")
+check('methods=["POST"]' in content, "мутирующие — только POST")
 
 print("\n=== HTML ссылается на /api/update ===")
-html = open(os.path.join(SIMPLE,"index.html")).read()
-check("updateApp()" in html, "updateApp() в HTML")
+html = open(os.path.join(SIMPLE,"index.html"), encoding="utf-8").read()
+check("post('api/update')" in html, "post('api/update') в HTML")
 check("api/update" in html, "api/update в HTML")
 
 print("\n=== start.bat указывает на Python 3.15 ===")
