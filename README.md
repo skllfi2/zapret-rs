@@ -10,7 +10,8 @@
 | `service_manager.py` | Вся логика: SCM-служба `zapret` (pywin32), winws.exe, списки, fakes, обновления. Полная замена `service.bat`. |
 | `main.py` | Flask-сервер на `http://127.0.0.1:8765/` (REST API + `index.html`). |
 | `index.html` | Веб-интерфейс: 4 вкладки, темы, i18n (ru/en), поллинг статуса. |
-| `zapret-tkinter.py` | Десктопная альтернатива на чистом tkinter (тёмная тема, без браузера). |
+| `zapret_pyside.py` | **Основной десктоп-UI на PySide6 6.12 (Qt 6).** Тёмная тема, фоновые потоки `QThreadPool`. |
+| `zapret-tkinter.py` | Запасной десктоп-UI на чистом tkinter — работает, если PySide6 не установлен. |
 
 Каталог с самим zapret (`bin/winws.exe`, `lists/`, `service.bat`) определяется автоматически:
 переменная окружения `ZAPRET_DIR` → `%LOCALAPPDATA%\AppWatch\Apps\zapret-discord-youtube`
@@ -20,12 +21,15 @@
 
 ```bat
 start.bat        # Flask-сервер -> откроется http://127.0.0.1:8765/
-python zapret-tkinter.py   # десктопный UI
+python zapret_pyside.py   # десктопный UI на PySide6 (основной)
+python zapret-tkinter.py  # десктопный UI на tkinter (запасной, без зависимостей)
 ```
 
-Зависимости: `pip install -r requirements.txt` (flask, pywin32). Некоторые действия
-(`sc`, `netsh`, управление службой) требуют запуска **от администратора** — статус
-прав отображается в интерфейсе.
+Зависимости: `pip install -r requirements.txt` (flask, pywin32, PySide6-Essentials).
+PySide6 ставится только `Essentials` (~215 МБ) — метапакет с `Addons` (~100 МБ) в проекте
+не нужен. Некоторые действия (`sc`, `netsh`, управление службой) требуют запуска
+**от администратора** — статус прав отображается в интерфейсе, кнопка «Admin (права)»
+перезапускает приложение с повышением (UAC).
 
 ## API
 

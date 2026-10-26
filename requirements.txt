@@ -1,2 +1,5 @@
 flask
 pywin32
+# Десктопный UI (zapret_pyside.py) — только Essentials, ~215 МБ.
+# Полный метапакет PySide6 не нужен: Addons (~100 МБ) в проекте не используются.
+PySide6-Essentials==6.12.0
