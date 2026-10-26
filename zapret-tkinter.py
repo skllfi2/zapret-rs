@@ -68,6 +68,30 @@ class ZapretApp:
         # Section label
         tk.Label(content, text="УПРАВЛЕНИЕ СЕРВИСОМ (SCM — без .bat)", font=("Segoe UI", 9, "bold"), fg=COLORS["text_muted"], bg=COLORS["bg_card"]).pack(anchor="w", pady=(4, 10))
 
+        # Стратегии: реальные .bat из каталога zapret (как в вебе)
+        strat_frame = tk.Frame(content, bg=COLORS["bg_card"])
+        strat_frame.pack(fill="x", pady=(0, 6))
+        tk.Label(strat_frame, text="Стратегия:", font=("Segoe UI", 9, "bold"),
+                 fg=COLORS["text_secondary"], bg=COLORS["bg_card"]).pack(side="left", padx=(2, 8))
+        self.strat_var = tk.StringVar(value=service_manager.current_strategy() or "")
+        self.strat_box = ttk.Combobox(strat_frame, textvariable=self.strat_var, state="readonly",
+                                      font=("Segoe UI", 9), width=30)
+        self.strat_box.pack(side="left", fill="x", expand=True)
+        self.strat_box.bind("<<ComboboxSelected>>", lambda e: self.apply_strategy())
+        apply_btn = tk.Button(strat_frame, text="Применить", command=self.apply_strategy,
+                              bg=COLORS["button_bg"], fg=COLORS["text_primary"],
+                              activebackground=COLORS["button_bg_hover"], font=("Segoe UI", 9, "bold"),
+                              relief="flat", bd=1, highlightthickness=1,
+                              highlightbackground=COLORS["border"], highlightcolor=COLORS["border_hover"])
+        apply_btn.pack(side="left", padx=(8, 2))
+        try:
+            strats = service_manager.list_strategies()
+            self.strat_box["values"] = strats
+            if not self.strat_var.get() and strats:
+                self.strat_var.set("general" if "general" in strats else strats[0])
+        except Exception:
+            self.strat_box["values"] = []
+
         # Buttons grid: 4 columns, clean rounded buttons
         btn_defs = [
             ("Status", lambda: self.run_action("service_status")),
@@ -185,9 +209,32 @@ class ZapretApp:
                                                 fake_type=parts[0], number=parts[1])
         self.append_output(f"[{'OK' if rr.get('ok') else 'ERR'}] {rr.get('stdout') or rr.get('stderr')}")
 
+    def apply_strategy(self):
+        """Применение выбранной стратегии в фоне (перезапуск службы — долго, UI не должен виснуть)."""
+        sid = self.strat_var.get()
+        if not sid:
+            self.append_output("[ERR] Стратегия не выбрана")
+            return
+        if not service_manager.is_admin():
+            self.append_output("[ERR] Применение стратегии требует прав администратора — "
+                               "нажми «Admin (права)» и повтори")
+            return
+        self.append_output(f">>> Применение стратегии: {sid} (служба будет перезапущена)...")
+        threading.Thread(target=self._apply_strategy_worker, args=(sid,), daemon=True).start()
+
+    def _apply_strategy_worker(self, sid):
+        r = service_manager.apply_strategy(sid)
+        # Вывод в Tkinter только через mainloop — планируем в главный поток
+        msg = f"[{'OK' if r.get('ok') else 'ERR'}] {r.get('service')}"
+        self.root.after(0, lambda: self.append_output(msg))
+        self.root.after(0, self.update_status)
+
     def run_action(self, action):
         self.append_output(f">>> Выполняется: {action}")
-        self.root.update()
+        # В фоне: sc/netsh/ipset могут занимать секунды — не блокируем UI
+        threading.Thread(target=self._run_action_worker, args=(action,), daemon=True).start()
+
+    def _run_action_worker(self, action):
         try:
             r = service_manager.run_service_action(action)
             if isinstance(r, tuple):
@@ -201,10 +248,10 @@ class ZapretApp:
                 result = f"[{'OK' if ok else 'ERR'}] {str(msg)[:200]}"
             else:
                 result = str(r)[:200]
-            self.append_output(result)
         except Exception as e:
-            self.append_output(f"[ОШИБКА] {str(e)[:200]}")
-        self.update_status()  # не refresh() — иначе каждый клик добавлял бы новый таймер
+            result = f"[ОШИБКА] {str(e)[:200]}"
+        self.root.after(0, lambda: self.append_output(result))
+        self.root.after(0, self.update_status)  # не refresh() — иначе каждый клик добавлял бы новый таймер
 
 if __name__ == "__main__":
     ZapretApp()
