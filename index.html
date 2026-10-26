@@ -90,7 +90,7 @@ body[data-theme="light"] select{background:#fff;color:#222;border-color:#ccc}
   <button class="action" onclick="post('api/clear_discord')" data-i18n="clear_discord">Очистить кэш Discord</button>
   <button class="action" onclick="post('api/tcp_timestamps')" data-i18n="tcp_timestamps">TCP Timestamps</button>
   <button class="action" onclick="post('api/admin_use')" data-i18n="admin_use">Admin / UAC</button>
-  <button class="action" onclick="showOut('api/test','diag-out')" data-i18n="run_tests">Run Tests</button>
+  <button class="action" onclick="runTests()" data-i18n="run_tests">Run Tests</button>
   <button class="action" onclick="showOut('api/hosts_check','diag-out')" data-i18n="hosts_check">Проверка hosts</button>
   <pre id="diag-out">Нажми кнопку, чтобы увидеть результат диагностики.</pre>
 </section>
@@ -129,8 +129,40 @@ function showOut(url, preId){ // read-only GET
   document.getElementById(preId).textContent='...';
   fetch(url).then(r=>r.json()).then(j2=>{
     const pre=document.getElementById(preId);
+    if(Array.isArray(j2.checks)){ // диагностика: чек-лист как в оригинале
+      const mark={ok:'[+]',warn:'[?]',bad:'[X]'};
+      pre.textContent = j2.checks.map(c=>`${mark[c.level]||'   '} ${c.name}: ${c.msg}`+
+        (c.url?`\n      ${c.url}`:'')).join('\n')+'\n\n'+(j2.service||'');
+      return;
+    }
     pre.textContent = (typeof j2.stdout==='string' && j2.stdout) ? j2.stdout + (j2.stderr?'\n'+j2.stderr:'') : (j2.service||j(j2));
   }).catch(e=>document.getElementById(preId).textContent=String(e));
+}
+// --- Тесты: запуск в фоне + поллинг состояния (тесты идут минуты) ---
+function runTests(){
+  const pre=document.getElementById('diag-out');
+  // Сначала — пре-чеки (GET /api/test): админ, curl, служба
+  fetch('api/test').then(r=>r.json()).then(chk=>{
+    if(!chk.ok){ pre.textContent = chk.service || j(chk); return; }
+    post('api/run_tests').then(res=>{
+      pre.textContent = res.ok ? (res.msg||'Тесты запущены...') : (res.msg||j(res));
+      if(!res.ok) return;
+      const iv=setInterval(()=>{
+        fetch('api/tests_state').then(r=>r.json()).then(st=>{
+          if(st.lines && st.lines.length){
+            const tail=st.lines.slice(-40).join('\n');
+            pre.textContent = (st.running?'[идёт...] \n':'')+tail;
+            pre.scrollTop = pre.scrollHeight;
+          }
+          if(!st.running){
+            clearInterval(iv);
+            if(st.result) pre.textContent=(st.result.stdout||[]).join('\n')+'\n'+
+              (st.result.service||'');
+          }
+        }).catch(()=>{});
+      },2000);
+    });
+  }).catch(e=>pre.textContent=String(e));
 }
 // --- Стратегии: загрузка из /api/strategies (реальные .bat) ---
 function loadStrategies(){

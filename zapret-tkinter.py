@@ -235,21 +235,33 @@ class ZapretApp:
         threading.Thread(target=self._run_action_worker, args=(action,), daemon=True).start()
 
     def _run_action_worker(self, action):
+        extra = []
         try:
             r = service_manager.run_service_action(action)
             if isinstance(r, tuple):
                 ok, msg = r
                 result = f"[{'OK' if ok else 'ERR'}] {msg}"
             elif isinstance(r, dict):
+                if r.get("checks"):
+                    # Диагностика: чек-лист, как PrintGreen/PrintYellow/PrintRed
+                    for ch in r["checks"]:
+                        mark = {"ok": "[+]", "warn": "[?]", "bad": "[X]"}.get(ch.get("level"), "   ")
+                        extra.append(f"{mark} {ch.get('name')}: {ch.get('msg')}")
+                        if ch.get("url"):
+                            extra.append(f"      {ch['url']}")
                 ok = r.get("ok", False)
                 msg = r.get("service", r.get("stdout", r.get("stderr", "")))
                 if isinstance(msg, bytes):
                     msg = msg.decode("utf-8", errors="replace")
-                result = f"[{'OK' if ok else 'ERR'}] {str(msg)[:200]}"
+                if isinstance(msg, list):
+                    msg = "; ".join(str(m) for m in msg[:10])
+                result = f"[{'OK' if ok else 'ERR'}] {str(msg)[:300]}"
             else:
                 result = str(r)[:200]
         except Exception as e:
             result = f"[ОШИБКА] {str(e)[:200]}"
+        # Вывод — только в главном потоке mainloop
+        self.root.after(0, lambda: [self.append_output(x) for x in extra])
         self.root.after(0, lambda: self.append_output(result))
         self.root.after(0, self.update_status)  # не refresh() — иначе каждый клик добавлял бы новый таймер
 

@@ -10,7 +10,7 @@
 | `service_manager.py` | Вся логика: SCM-служба `zapret` (pywin32), winws.exe, списки, fakes, обновления. Полная замена `service.bat`. |
 | `main.py` | Flask-сервер на `http://127.0.0.1:8765/` (REST API + `index.html`). |
 | `index.html` | Веб-интерфейс: 4 вкладки, темы, i18n (ru/en), поллинг статуса. |
-| `zapret_pyside.py` | **Основной десктоп-UI на PySide6 6.12 (Qt 6).** Тёмная тема, фоновые потоки `QThreadPool`. |
+| `zapret_pyside.py` | **Основной десктоп-UI на PySide6 6.12 (Qt 6).** Структура меню как в оригинальном `service.bat` (секции `:: SERVICE/SETTINGS/UPDATES/TOOLS`, пункты 1–12, статусы в `[]`), тёмная тема, фоновые потоки `QThreadPool`, живой вывод тестов через сигнал. |
 | `zapret-tkinter.py` | Запасной десктоп-UI на чистом tkinter — работает, если PySide6 не установлен. |
 
 Каталог с самим zapret (`bin/winws.exe`, `lists/`, `service.bat`) определяется автоматически:
@@ -31,10 +31,32 @@ PySide6 ставится только `Essentials` (~215 МБ) — метапа�
 **от администратора** — статус прав отображается в интерфейсе, кнопка «Admin (права)»
 перезапускает приложение с повышением (UAC).
 
+## Меню, диагностикa и тесты
+
+Десктопный UI повторяет структуру `service.bat` (ZAPRET SERVICE MANAGER v1.10.4):
+заголовок с версией и активной стратегией, секции `:: SERVICE` (Install / Remove /
+Check Status), `:: SETTINGS` (Game Filter `[enabled (TCP)]`, IPSet Filter `[loaded]`,
+Auto-Update Check `[enabled]`, Replace active fakes), `:: UPDATES` (Update IPSet /
+Update Hosts / Check for Updates), `:: TOOLS` (Run Diagnostics / Run Tests).
+Статусы тумблеров читаются из тех же файлов, что и в оригинале
+(`utils/game_filter.enabled`, `lists/ipset-all.txt`, `utils/check_updates.enabled`).
+
+- **Run Diagnostics** — полный порт `:service_diagnostics` на Python (17 проверок: BFE,
+  прокси, TCP timestamps, Adguard, Killer, Intel Connectivity, Check Point, SmartByte,
+  кириллица в пути, OneDrive, WinDivert, VPN, DoH, hosts, конфликты). Цвета
+  `[+]`/`[?]`/`[X]` — как PrintGreen/PrintYellow/PrintRed. Только чтение; авто-фиксы
+  (TCP timestamps + удаление конфликтных служб) — отдельная кнопка «Remove conflicts».
+- **Run Tests** — пре-чеки (права админа, curl, служба zapret удалена), затем запуск
+  оригинального `utils\test zapret.ps1` с ответами на его `Read-Host` через stdin;
+  строки вывода идут в UI живьём, итог и «Best strategy» берутся из
+  `utils/test results/test_results_*.txt`.
+
 ## API
 
-Чтение — GET: `/api/status`, `/api/diag`, `/api/test`, `/api/fakes`, `/api/game_filter`,
-`/api/hosts_check`, `/api/strategies`, `/api/lists`, `/api/lists_get?name=...`.
+Чтение — GET: `/api/status`, `/api/diag` (чек-лист диагностик), `/api/test`
+(только пре-чеки условий), `/api/tests_state`, `/api/menu_status`, `/api/fakes`,
+`/api/game_filter`, `/api/hosts_check`, `/api/strategies`, `/api/lists`,
+`/api/lists_get?name=...`.
 
 Изменения — **только POST** с заголовком `X-Zapret-Token` (токен: GET `/csrf-token`
 или инлайнится в `index.html`). Это защита от CSRF: раньше любая веб-страница могла
@@ -43,7 +65,9 @@ PySide6 ставится только `Essentials` (~215 МБ) — метапа�
 `/api/start`, `/api/stop`, `/api/service_install`, `/api/service_uninstall`,
 `/api/update`, `/api/update_ipset`, `/api/update_hosts`, `/api/replace_fakes`,
 `/api/set_strategy`, `/api/clear_discord`, `/api/tcp_timestamps`, `/api/admin_use`,
-`/api/lists_edit`, `/api/autostart`.
+`/api/lists_edit`, `/api/autostart`, `/api/run_tests` (запуск тестов в фоне),
+`/api/set_game_filter`, `/api/toggle_check_updates`, `/api/toggle_ipset`,
+`/api/remove_conflicts`.
 
 ## Тесты
 

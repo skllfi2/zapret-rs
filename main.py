@@ -63,7 +63,40 @@ def status():
 def diag(): return jsonify(run_service_action("service_diagnostics"))
 
 @app.route("/api/test")
-def test_r(): return jsonify(run_service_action("test"))
+def test_r():
+    # GET без запуска: только проверка условий (запуск — POST /api/run_tests,
+    # тесты идут минуты и требуют админа)
+    return jsonify(run_service_action("tests_prereq"))
+
+# Состояние фонового запуска тестов: веб поллит /api/tests_state
+_TESTS = {"running": False, "lines": [], "result": None}
+
+@app.route("/api/run_tests", methods=["POST"])
+def run_tests_endpoint():
+    if _check_csrf(): return _check_csrf()
+    if _TESTS["running"]:
+        return jsonify({"ok": False, "msg": "Тесты уже выполняются", "running": True})
+    _TESTS.update(running=True, lines=[], result=None)
+
+    def _worker():
+        def _on_line(line):
+            _TESTS["lines"].append(line)
+            if len(_TESTS["lines"]) > 500:
+                del _TESTS["lines"][:200]
+        try:
+            r = run_service_action("run_tests", on_line=_on_line)
+        except Exception as e:
+            r = {"ok": False, "service": str(e)}
+        _TESTS.update(running=False, result=r)
+
+    import threading
+    threading.Thread(target=_worker, daemon=True).start()
+    return jsonify({"ok": True, "running": True,
+                    "msg": "Тесты запущены в фоне — полли /api/tests_state"})
+
+@app.route("/api/tests_state")
+def tests_state():
+    return jsonify(_TESTS)
 
 @app.route("/api/fakes")
 def fakes(): return jsonify(run_service_action("list_fakes"))
@@ -78,6 +111,36 @@ def restore_payloads():
 
 @app.route("/api/game_filter")
 def game_filter(): return jsonify(run_service_action("load_game_filter"))
+
+@app.route("/api/menu_status")
+def menu_status_ep(): return jsonify(run_service_action("menu_status"))
+
+@app.route("/api/set_game_filter", methods=["POST"])
+def set_game_filter_ep():
+    if _check_csrf(): return _check_csrf()
+    g = lambda k, d: request.form.get(k) or request.args.get(k, d)
+    return jsonify(run_service_action("set_game_filter",
+                                      mode=g("mode", "disabled"),
+                                      tcp=g("tcp", "1024-65535"),
+                                      udp=g("udp", "1024-65535")))
+
+@app.route("/api/toggle_check_updates", methods=["POST"])
+def toggle_check_updates_ep():
+    if _check_csrf(): return _check_csrf()
+    en = request.form.get("enable") or request.args.get("enable")
+    return jsonify(run_service_action("toggle_check_updates",
+                                      enable=None if en is None else en in ("1", "true", "enabled")))
+
+@app.route("/api/toggle_ipset", methods=["POST"])
+def toggle_ipset_ep():
+    if _check_csrf(): return _check_csrf()
+    mode = request.form.get("mode") or request.args.get("mode")
+    return jsonify(run_service_action("toggle_ipset", mode=mode))
+
+@app.route("/api/remove_conflicts", methods=["POST"])
+def remove_conflicts_ep():
+    if _check_csrf(): return _check_csrf()
+    return jsonify(run_service_action("remove_conflicts"))
 
 @app.route("/api/hosts_check")
 def hosts_check(): return jsonify(run_service_action("update_hosts"))

@@ -233,5 +233,118 @@ class TestServiceManager(unittest.TestCase):
             p = get_bin_path()
             self.assertTrue(isinstance(p, str))
 
+    # === Переработка меню: диагностикa, тесты, тумблеры (порт service.bat) ===
+
+    def test_menu_status_shape(self):
+        # Шапка меню: версия, стратегия и три тумблера как в оригинале
+        from service_manager import menu_status
+        ms = menu_status()
+        self.assertTrue(ms["ok"])
+        for key in ("version", "strategy", "game_filter", "ipset", "check_updates", "admin"):
+            self.assertIn(key, ms)
+        self.assertIn(ms["ipset"], ("any", "none", "loaded"))
+        self.assertIn(ms["check_updates"], ("enabled", "disabled"))
+
+    def test_run_diagnostics_all_checks(self):
+        # Диагностика: 17+ проверок оригинала, каждая с уровнем ok/warn/bad
+        from service_manager import run_diagnostics
+        with mock.patch("service_manager.subprocess.run") as sr:
+            # sc query BFE -> RUNNING; прочие команды — пустой вывод
+            def _side(cmd, **kw):
+                r = mock.Mock()
+                r.returncode = 0
+                r.stdout = "        STATE              : 4  RUNNING\n" if cmd[:3] == ["sc", "query", "BFE"] else ""
+                r.stderr = ""
+                return r
+            sr.side_effect = _side
+            with mock.patch("service_manager.winws_is_running", return_value=True):
+                d = run_diagnostics()
+        self.assertGreaterEqual(len(d["checks"]), 17)
+        names = {c["name"] for c in d["checks"]}
+        for n in ("BFE", "Proxy", "TCP timestamps", "Adguard", "Killer", "Check Point",
+                  "SmartByte", "Cyrillic path", "OneDrive", "WinDivert", "VPN",
+                  "Secure DNS", "Hosts file", "Conflicting bypasses", "Discord"):
+            self.assertIn(n, names)
+        for c in d["checks"]:
+            self.assertIn(c["level"], ("ok", "warn", "bad"))
+        self.assertIn("counts", d)
+        self.assertEqual(sum(d["counts"].values()), len(d["checks"]))
+
+    def test_tests_prerequisites_reports_problems(self):
+        # Пре-чеки тестов честно перечисляют проблемы (права/curl/служба)
+        from service_manager import tests_prerequisites
+        with mock.patch("service_manager.is_admin", return_value=False):
+            probs = tests_prerequisites()
+        self.assertTrue(any("Administrator" in p for p in probs))
+
+    def test_run_tests_refuses_without_prereq(self):
+        # Без прав тесты не запускаются вообще — возвращается список проблем
+        from service_manager import run_tests
+        with mock.patch("service_manager.tests_prerequisites",
+                        return_value=["no admin"]):
+            r = run_tests()
+        self.assertFalse(r["ok"])
+        self.assertEqual(r["problems"], ["no admin"])
+
+    def test_run_tests_answers_readhost(self):
+        # Ответы на Read-Host пишутся в stdin ps1-скрипта (тип, режим, номер)
+        from service_manager import run_tests
+        proc = mock.Mock()
+        proc.stdout = iter(["[OK] Administrator rights detected", "done"])
+        proc.stdin = mock.Mock()
+        with mock.patch("service_manager.tests_prerequisites", return_value=[]), \
+             mock.patch("service_manager.subprocess.Popen", return_value=proc), \
+             mock.patch("service_manager._latest_test_result", return_value=None):
+            r = run_tests(test_type=1, mode=2, selection=3)
+        written = proc.stdin.write.call_args[0][0]
+        self.assertEqual(written, "1\n2\n3\n")
+        self.assertTrue(r["ok"])
+        self.assertIn("[OK] Administrator rights detected", r["stdout"])
+
+    def test_toggle_ipset_cycle(self):
+        # Цикл loaded->none->any->loaded с backup-файлом (как :ipset_switch)
+        import tempfile, shutil
+        from service_manager import ipset_status, toggle_ipset
+        d = tempfile.mkdtemp()
+        lf = os.path.join(d, "ipset-all.txt")
+        with open(lf, "w", encoding="utf-8") as f:
+            f.write("1.2.3.4/32\n")
+        try:
+            with mock.patch("service_manager.LISTS_DIR", d):
+                self.assertEqual(ipset_status(), "loaded")
+                r = toggle_ipset(); self.assertTrue(r["ok"]); self.assertEqual(ipset_status(), "none")
+                r = toggle_ipset(); self.assertTrue(r["ok"]); self.assertEqual(ipset_status(), "any")
+                r = toggle_ipset(); self.assertTrue(r["ok"]); self.assertEqual(ipset_status(), "loaded")
+        finally:
+            shutil.rmtree(d, ignore_errors=True)
+
+    def test_set_game_filter_writes_file(self):
+        import tempfile, shutil
+        from service_manager import set_game_filter, game_filter_label
+        d = tempfile.mkdtemp()
+        try:
+            with mock.patch("service_manager.ORIG_DIR", d):
+                r = set_game_filter("tcp")
+                self.assertTrue(r["ok"])
+                with open(os.path.join(d, "utils", "game_filter.enabled"), encoding="utf-8") as f:
+                    self.assertIn("mode=tcp", f.read())
+                self.assertEqual(game_filter_label(), "enabled (TCP)")
+        finally:
+            shutil.rmtree(d, ignore_errors=True)
+
+    def test_toggle_check_updates_flag_file(self):
+        import tempfile, shutil
+        from service_manager import toggle_check_updates, check_updates_flag
+        d = tempfile.mkdtemp()
+        try:
+            with mock.patch("service_manager.ORIG_DIR", d):
+                self.assertEqual(check_updates_flag(), "disabled")
+                r = toggle_check_updates(True); self.assertTrue(r["ok"])
+                self.assertEqual(check_updates_flag(), "enabled")
+                r = toggle_check_updates(False); self.assertTrue(r["ok"])
+                self.assertEqual(check_updates_flag(), "disabled")
+        finally:
+            shutil.rmtree(d, ignore_errors=True)
+
 if __name__ == "__main__":
     unittest.main(verbosity=2)

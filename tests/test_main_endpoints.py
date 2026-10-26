@@ -154,6 +154,61 @@ class TestMainEndpoints(unittest.TestCase):
         # Наш адрес — проходит
         self.assertEqual(self.c.get("/api/status", headers={"Host": "127.0.0.1:8765"}).status_code, 200)
 
+    # === Диагностика и тесты (порт service.bat) ===
+    def test_diag_returns_checklist(self):
+        fake = {"ok": True, "checks": [{"name": "BFE", "level": "ok", "msg": "passed", "url": ""}],
+                "service": "stub", "counts": {"ok": 1, "warn": 0, "bad": 0}}
+        with mock.patch("main.run_service_action", return_value=fake) as m:
+            r = self.c.get("/api/diag").get_json()
+            m.assert_called_once_with("service_diagnostics")
+        self.assertIn("checks", r)
+        self.assertEqual(r["counts"]["ok"], 1)
+
+    def test_test_endpoint_is_precheck_only(self):
+        # GET /api/test — только пре-чеки условий, без запуска многоминутных тестов
+        with mock.patch("main.run_service_action", return_value={"ok": True}) as m:
+            r = self.c.get("/api/test").get_json()
+            m.assert_called_once_with("tests_prereq")
+        self.assertTrue(r["ok"])
+
+    def test_run_tests_is_post_only(self):
+        self.assertEqual(self.c.get("/api/run_tests").status_code, 405)
+
+    def test_run_tests_requires_token(self):
+        self.assertEqual(self.c.post("/api/run_tests").status_code, 403)
+
+    def test_menu_status_endpoint(self):
+        fake = {"ok": True, "version": "1.10.4", "strategy": "general",
+                "game_filter": "enabled (TCP)", "ipset": "loaded",
+                "check_updates": "enabled", "admin": False}
+        with mock.patch("main.run_service_action", return_value=fake) as m:
+            r = self.c.get("/api/menu_status").get_json()
+            m.assert_called_once_with("menu_status")
+        self.assertEqual(r["ipset"], "loaded")
+        self.assertEqual(r["version"], "1.10.4")
+
+    def test_toggles_dispatch(self):
+        for ep, action in [("/api/toggle_check_updates", "toggle_check_updates"),
+                           ("/api/toggle_ipset", "toggle_ipset"),
+                           ("/api/remove_conflicts", "remove_conflicts")]:
+            with mock.patch("main.run_service_action") as m:
+                m.return_value = {"ok": True, "service": "stub"}
+                r = self.c.post(ep, headers=self.h).get_json()
+                self.assertTrue(m.called, ep)
+                self.assertTrue(r["ok"], ep)
+
+    def test_set_game_filter_passes_mode(self):
+        with mock.patch("main.run_service_action") as m:
+            m.return_value = {"ok": True}
+            self.c.post("/api/set_game_filter?mode=tcp", headers=self.h)
+            m.assert_called_once_with("set_game_filter", mode="tcp",
+                                      tcp="1024-65535", udp="1024-65535")
+
+    def test_tests_state_shape(self):
+        r = self.c.get("/api/tests_state").get_json()
+        for key in ("running", "lines", "result"):
+            self.assertIn(key, r)
+
 
 if __name__ == "__main__":
     unittest.main(verbosity=2)

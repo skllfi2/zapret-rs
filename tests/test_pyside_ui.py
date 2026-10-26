@@ -25,10 +25,11 @@ class TestPySideUI(unittest.TestCase):
     def setUpClass(cls):
         # Импорт внутри setUpClass: QApplication создаётся один раз на процесс
         import zapret_pyside as z
-        from PySide6.QtWidgets import QApplication, QPushButton, QComboBox
+        from PySide6.QtWidgets import QApplication, QPushButton, QComboBox, QLabel
         cls.z = z
         cls.QPushButton = QPushButton
         cls.QComboBox = QComboBox
+        cls.QLabel = QLabel
         cls.app = QApplication.instance() or QApplication([])
         cls.win = z.MainWindow()
 
@@ -40,12 +41,23 @@ class TestPySideUI(unittest.TestCase):
         return [b.text() for b in self.win.findChildren(self.QPushButton)]
 
     def test_all_buttons_present(self):
-        # Паритет с tkinter-версией: все действия доступны
+        # Пункты меню — 12 как в оригинальном service.bat + доп. действия
         texts = self._btn_texts()
-        for a in ["Status", "Install Svc", "Uninstall", "Start", "Stop", "Diag",
-                  "Test", "Update", "GameFilter", "Clear Discord", "List Fakes",
-                  "Restore Payload", "IPSet Update", "Admin (права)", "Применить"]:
-            self.assertIn(a, texts, f"Кнопка {a} отсутствует")
+        for a in ["1.  Install Service", "2.  Remove Services", "3.  Check Status",
+                  "4.  Game Filter", "5.  IPSet Filter", "6.  Auto-Update Check",
+                  "7.  Replace active fakes", "8.  Update IPSet List",
+                  "9.  Update Hosts File", "10. Check for Updates",
+                  "11. Run Diagnostics", "12. Run Tests",
+                  "Start Service", "Stop Service", "Admin (права)",
+                  "Remove conflicts", "Clear Discord cache", "Restore payload (.bin)"]:
+            self.assertIn(a, texts, f"Пункт {a} отсутствует")
+
+    def test_menu_sections_like_original(self):
+        # Секции меню — как в service.bat: :: SERVICE/SETTINGS/UPDATES/TOOLS
+        secs = [l.text() for l in self.win.findChildren(self.QLabel)
+                if l.objectName() == "section"]
+        for s in [":: SERVICE", ":: SETTINGS", ":: UPDATES", ":: TOOLS"]:
+            self.assertIn(s, secs, f"Секция {s} отсутствует")
 
     def test_strategy_selector_populated(self):
         # Комбобокс стратегий реально заполнен из list_strategies() (реальные .bat)
@@ -84,9 +96,10 @@ class TestPySideSource(unittest.TestCase):
     def test_all_action_strings_present(self):
         src = _read_src()
         for a in ["service_status", "service_install", "service_remove", "start",
-                  "stop", "service_diagnostics", "test", "check_updates",
-                  "load_game_filter", "clear_discord", "restore_payloads",
-                  "ipset_update", "relaunch_admin"]:
+                  "stop", "toggle_ipset", "toggle_check_updates", "check_updates",
+                  "set_game_filter", "menu_status", "clear_discord",
+                  "restore_payloads", "ipset_update", "update_hosts",
+                  "remove_conflicts", "relaunch_admin"]:
             self.assertIn(f'"{a}"', src, f"Действие {a} не вызывается")
 
     def test_admin_gate_on_strategy(self):
