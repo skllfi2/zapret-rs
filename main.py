@@ -56,6 +56,9 @@ def test_r(): return jsonify(run_service_action("test"))
 @app.route("/api/fakes")
 def fakes(): return jsonify(run_service_action("list_fakes"))
 
+@app.route("/api/payloads")
+def payloads(): return jsonify(run_service_action("payloads_status"))
+
 @app.route("/api/game_filter")
 def game_filter(): return jsonify(run_service_action("load_game_filter"))
 

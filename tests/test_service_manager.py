@@ -126,6 +126,22 @@ class TestServiceManager(unittest.TestCase):
         self.assertTrue(os.path.isfile(os.path.join(ORIG_DIR, "bin", "winws.exe")),
                         f"winws.exe не найден в {BIN_DIR}")
 
+    def test_payloads_status(self):
+        from service_manager import payloads_status
+        r = payloads_status()
+        self.assertIsInstance(r["total"], int)
+        self.assertIsInstance(r["missing"], list)
+        self.assertIn("ok", r)
+        # Мок: все обязательные файлы на месте
+        with mock.patch("service_manager.os.path.isdir", return_value=True), \
+             mock.patch("service_manager.os.listdir",
+                        return_value=["ACTIVE_DISCORD_UDP.bin", "ACTIVE_GAME_UDP.bin",
+                                      "quic_initial_www_google_com.bin",
+                                      "tls_clienthello_www_google_com.bin"]):
+            r2 = payloads_status()
+        self.assertTrue(r2["ok"])
+        self.assertEqual(r2["missing"], [])
+
     def test_hidden_cmd_get_bin(self):
         from service_manager import get_bin_path, hidden_cmd
         with mock.patch("service_manager.os.path.dirname", return_value="C:\\fake"):

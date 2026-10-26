@@ -113,6 +113,12 @@ class ZapretApp:
         self.root.mainloop()
 
     def refresh(self):
+        """Обновление статуса + планирование следующего опроса (ровно один цикл)."""
+        self.update_status()
+        self.root.after(3000, self.refresh)
+
+    def update_status(self):
+        # Отдельно от refresh: кнопки вызывают только это, чтобы не плодить таймеры
         try:
             s = service_manager.query_status()
             running = service_manager.is_running()
@@ -124,7 +130,6 @@ class ZapretApp:
             self.status_text.config(text=f"ERR: {str(e)[:30]}", fg=COLORS["danger"])
             self.dot.delete("all")
             self.dot.create_oval(2, 2, 12, 12, fill=COLORS["danger"], outline="")
-        self.root.after(3000, self.refresh)
 
     def append_output(self, text):
         self.output.config(state="normal")
@@ -184,7 +189,7 @@ class ZapretApp:
             self.append_output(result)
         except Exception as e:
             self.append_output(f"[ОШИБКА] {str(e)[:200]}")
-        self.refresh()
+        self.update_status()  # не refresh() — иначе каждый клик добавлял бы новый таймер
 
 if __name__ == "__main__":
     ZapretApp()

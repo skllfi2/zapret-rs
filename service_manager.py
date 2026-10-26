@@ -342,6 +342,24 @@ def hidden_cmd(cmd_list, cwd=ORIG_DIR, timeout=30):
     except Exception as e:
         return {"ok": False, "stdout": "", "stderr": str(e)}
 
+def payloads_status():
+    """Проверка fake-payload файлов (*.bin), на которые ссылается winws.exe.
+    В рабочей копии их может не быть (лежат в архиве версий) — тогда fake-стратегии не работают."""
+    if not os.path.isdir(BIN_DIR):
+        return {"ok": False, "missing": [BIN_DIR], "total": 0,
+                "stderr": f"Каталог bin не найден: {BIN_DIR}"}
+    try:
+        files = [f for f in os.listdir(BIN_DIR) if f.lower().endswith(".bin")]
+    except OSError as e:
+        return {"ok": False, "missing": [], "total": 0, "stderr": str(e)}
+    # Обязательные для работы десинхронизации (как в строке winws сервиса)
+    required = ["ACTIVE_DISCORD_UDP.bin", "ACTIVE_GAME_UDP.bin",
+                "quic_initial_www_google_com.bin", "tls_clienthello_www_google_com.bin"]
+    missing = [r for r in required if r not in files]
+    return {"ok": not missing, "total": len(files), "missing": missing,
+            "stdout": f"payload-файлов в bin: {len(files)}; отсутствует обязательных: {len(missing)}",
+            "stderr": ("Отсутствуют: " + ", ".join(missing)) if missing else ""}
+
 def run_service_action(action="status_zapret", arg="", **kwargs):
     """Основной маршрутизатор — заменяет service.bat полностью.
     kwargs пробрасываются в функцию (например, fake_type/number для replace_active_fakes)."""
@@ -361,10 +379,16 @@ def run_service_action(action="status_zapret", arg="", **kwargs):
         return load_user_lists()
     if action == "service_diagnostics":
         try:
-            return {"ok": True, "service": f"zapret_service={query_status()}, winws_running={winws_is_running()}, "
-                                           f"admin={is_admin()}, dir={ORIG_DIR}"}
+            pl = payloads_status()
+            return {"ok": True,
+                    "service": f"zapret_service={query_status()}, winws_running={winws_is_running()}, "
+                               f"admin={is_admin()}, dir={ORIG_DIR}, "
+                               f"payloads={pl['total']} (missing_required={len(pl['missing'])})",
+                    "payloads": pl}
         except Exception as e:
             return {"ok": True, "service": f"diag error: {e}"}
+    if action == "payloads_status":
+        return payloads_status()
     if action == "status_zapret":
         return {"ok": True, "service": f"winws.exe running={winws_is_running()}, service={query_status()}"}
     if action == "replace_active_fakes":
