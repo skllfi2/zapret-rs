@@ -1,0 +1,216 @@
+# Zapret Simple — вне браузера, из нуля, как оригинал
+# Запуск: double-click start.bat -> http://127.0.0.1:8765/
+#
+# Безопасность: мутирующие эндпоинты принимают только POST + заголовок
+# X-Zapret-Token (токен отдаётся в index.html). Это закрывает CSRF —
+# раньше любая веб-страница могла остановить службу тегом <img>.
+from flask import Flask, jsonify, request, abort
+import hmac, os
+import service_manager
+from service_manager import run_service_action  # полная замена service.bat
+
+app = Flask(__name__)
+# Каталог zapret определяется автоматически в service_manager (ZAPRET_DIR / AppWatch / Pictures)
+ORIG_DIR = service_manager.ORIG_DIR
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+CSRF_TOKEN = os.urandom(24).hex()  # живёт только до перезапуска сервера
+
+def _check_csrf():
+    """Мутирующие запросы: только POST + валидный токен."""
+    if request.method != "POST":
+        return jsonify({"ok": False, "msg": "Используй POST (CSRF protection)"}), 405
+    if not hmac.compare_digest(request.headers.get("X-Zapret-Token", ""), CSRF_TOKEN):
+        return jsonify({"ok": False, "msg": "Bad or missing X-Zapret-Token"}), 403
+    return None
+
+@app.route("/csrf-token")
+def csrf_token():
+    # Для Tkinter/скриптов: GET-эндпоинт без side effects
+    return jsonify({"token": CSRF_TOKEN})
+
+@app.route("/")
+def index():
+    with open(os.path.join(BASE_DIR, "index.html"), encoding="utf-8") as f:
+        html = f.read()
+    # Токен инлайнится в страницу — браузерный JS подставит его в заголовки
+    return html.replace("__CSRF_TOKEN__", CSRF_TOKEN)
+
+@app.route("/api/status")
+def status():
+    try:
+        return jsonify({"running": service_manager.is_running(),
+                        "service": service_manager.query_status(),
+                        "winws": service_manager.winws_is_running(),
+                        "admin": service_manager.is_admin(),
+                        "dir": ORIG_DIR})
+    except Exception as e:
+        return jsonify({"running": False, "service": f"ERR:{e}"})
+
+# === READ-ONLY ===
+@app.route("/api/diag")
+def diag(): return jsonify(run_service_action("service_diagnostics"))
+
+@app.route("/api/test")
+def test_r(): return jsonify(run_service_action("test"))
+
+@app.route("/api/fakes")
+def fakes(): return jsonify(run_service_action("list_fakes"))
+
+@app.route("/api/game_filter")
+def game_filter(): return jsonify(run_service_action("load_game_filter"))
+
+@app.route("/api/hosts_check")
+def hosts_check(): return jsonify(run_service_action("update_hosts"))
+
+@app.route("/api/strategies")
+def strategies():
+    # Реальные стратегии = .bat файлы в каталоге zapret (кроме service*)
+    ids = []
+    try:
+        for f in sorted(os.listdir(ORIG_DIR)):
+            if f.lower().endswith(".bat") and not f.lower().startswith("service"):
+                ids.append(os.path.splitext(f)[0])
+    except OSError:
+        pass
+    return jsonify({"strategies": [{"id": i, "name": i} for i in ids]})
+
+@app.route("/api/lists")
+def lists():
+    d = os.path.join(ORIG_DIR, "lists")
+    try: files = sorted(os.listdir(d))
+    except OSError: files = []
+    return jsonify({"files": files, "dir": d})
+
+@app.route("/api/lists_get")
+def lists_get():
+    name = os.path.basename((request.args.get("name") or "").replace("\\", "/"))
+    if not (name.startswith("list-") or name.startswith("ipset-")) or not name.endswith(".txt"):
+        return jsonify({"ok": False, "msg": "Invalid list file"})
+    p = os.path.join(ORIG_DIR, "lists", name)
+    if os.path.commonpath([os.path.abspath(p), os.path.abspath(os.path.join(ORIG_DIR, "lists"))]) \
+            != os.path.abspath(os.path.join(ORIG_DIR, "lists")):
+        return jsonify({"ok": False, "msg": "Path escapes lists dir"})
+    try:
+        with open(p, encoding="utf-8", errors="replace") as f:
+            return jsonify({"ok": True, "file": name, "content": f.read()})
+    except OSError as e:
+        return jsonify({"ok": False, "msg": str(e)})
+
+# === MUTATING (POST + CSRF) ===
+@app.route("/api/start", methods=["POST"])
+def start():
+    if _check_csrf(): return _check_csrf()
+    ok, msg = service_manager.start_service()
+    return jsonify({"ok": ok, "service": msg})
+
+@app.route("/api/stop", methods=["POST"])
+def stop():
+    if _check_csrf(): return _check_csrf()
+    ok, msg = service_manager.stop_service()
+    return jsonify({"ok": ok, "service": msg})
+
+@app.route("/api/service_install", methods=["POST"])
+def svc_install():
+    if _check_csrf(): return _check_csrf()
+    ok, msg = service_manager.install_service()
+    return jsonify({"ok": ok, "service": msg})
+
+@app.route("/api/service_uninstall", methods=["POST"])
+def svc_uninstall():
+    if _check_csrf(): return _check_csrf()
+    ok, msg = service_manager.uninstall_service()
+    return jsonify({"ok": ok, "service": msg})
+
+@app.route("/api/update", methods=["POST"])
+def update(): 
+    if _check_csrf(): return _check_csrf()
+    return jsonify(run_service_action("check_updates"))
+
+@app.route("/api/update_ipset", methods=["POST"])
+def update_ipset():
+    if _check_csrf(): return _check_csrf()
+    return jsonify(run_service_action("ipset_update"))
+
+@app.route("/api/update_hosts", methods=["POST"])
+def update_hosts():
+    if _check_csrf(): return _check_csrf()
+    return jsonify(run_service_action("update_hosts"))
+
+@app.route("/api/replace_fakes", methods=["POST"])
+def replace_fakes():
+    if _check_csrf(): return _check_csrf()
+    # type=1 (Discord) / 2 (GameFilter), number — позиция из /api/fakes
+    return jsonify(run_service_action("replace_active_fakes",
+                                      fake_type=request.form.get("type") or request.args.get("type"),
+                                      number=request.form.get("number") or request.args.get("number")))
+
+@app.route("/api/set_strategy", methods=["POST"])
+def set_strat():
+    if _check_csrf(): return _check_csrf()
+    sid = request.form.get("id") or request.args.get("id", "general")
+    bat = os.path.join(ORIG_DIR, sid + ".bat")
+    if not os.path.isfile(bat):
+        return jsonify({"ok": False, "strategy": sid, "msg": f"Файл стратегии не найден: {sid}.bat"})
+    return jsonify({"ok": True, "strategy": sid, "bat": bat,
+                    "msg": f"Стратегия {sid} готова к запуску ({sid}.bat). "
+                           "Служба использует свою строку winws — перезапуск через service.bat."})
+
+@app.route("/api/clear_discord", methods=["POST"])
+def clear_discord():
+    if _check_csrf(): return _check_csrf()
+    return jsonify(run_service_action("clear_discord"))
+
+@app.route("/api/tcp_timestamps", methods=["POST"])
+def tcp_timestamps():
+    if _check_csrf(): return _check_csrf()
+    ok, msg = service_manager.tcp_timestamps()
+    return jsonify({"ok": ok, "msg": msg})
+
+@app.route("/api/admin_use", methods=["POST"])
+def admin_use():
+    if _check_csrf(): return _check_csrf()
+    return jsonify(run_service_action("admin"))
+
+@app.route("/api/lists_edit", methods=["POST"])
+def lists_edit():
+    if _check_csrf(): return _check_csrf()
+    name = request.form.get("name") or request.args.get("name")
+    content = request.form.get("content") or request.args.get("content")
+    if name and content is not None:
+        d = os.path.join(ORIG_DIR, "lists")
+        # Только базовое имя без сепараторов — защита от path traversal
+        name = os.path.basename(name.replace("\\", "/"))
+        if not (name.startswith("list-") or name.startswith("ipset-")) or not name.endswith(".txt"):
+            return jsonify({"ok": False, "msg": "Invalid list file"})
+        p = os.path.join(d, name)
+        if os.path.commonpath([os.path.abspath(p), os.path.abspath(d)]) != os.path.abspath(d):
+            return jsonify({"ok": False, "msg": "Path escapes lists dir"})
+        try:
+            with open(p, "w", encoding="utf-8") as f: f.write(content)
+            return jsonify({"ok": True, "file": name, "lines": len(content.splitlines())})
+        except OSError as e:
+            return jsonify({"ok": False, "msg": str(e)})
+    return jsonify({"ok": False, "msg": "Invalid list file"})
+
+@app.route("/api/autostart", methods=["POST"])
+def autostart():
+    if _check_csrf(): return _check_csrf()
+    on = (request.form.get("enable") or request.args.get("enable", "true")) == "true"
+    try:
+        import winreg
+        bat = os.path.join(BASE_DIR, "start.bat")
+        k = winreg.CreateKey(winreg.HKEY_CURRENT_USER, r"Software\Microsoft\Windows\CurrentVersion\Run")
+        if on:
+            # Python не умеет запускать .bat — оборачиваем в cmd /c
+            winreg.SetValueEx(k, "ZapretSimple", 0, winreg.REG_SZ, f'cmd /c start "" "{bat}"')
+        else:
+            winreg.DeleteValue(k, "ZapretSimple")
+        return jsonify({"ok": True, "autostart": on})
+    except Exception as e:
+        return jsonify({"ok": False, "msg": str(e)})
+
+if __name__ == "__main__":
+    # Чистый веб-сервер (без pywebview) — работает через браузер
+    # Открыть: http://localhost:8765/
+    print(f"Zapret Simple: http://127.0.0.1:8765/  (dir={ORIG_DIR})")
+    app.run(host="127.0.0.1", port=8765, debug=False, threaded=True)
