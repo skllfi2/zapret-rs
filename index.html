@@ -63,6 +63,7 @@ body[data-theme="light"] select{background:#fff;color:#222;border-color:#ccc}
   <button class="action" onclick="post('api/start')" data-i18n="start">Запустить</button>
   <button class="action" onclick="post('api/stop')" data-i18n="stop">Остановить</button>
   <button class="action" onclick="post('api/update')" data-i18n="update_btn">Обновить (check_updates)</button>
+  <button class="action" onclick="post('api/elevate')" data-i18n="elevate">Admin (права)</button>
   <div style="margin-top:8px"><label data-i18n="strategy">Стратегия:</label><select id="strat-select" onchange="setStrategy(this.value)"></select>
   <button class="action" onclick="showOut('api/game_filter','diag-out')" data-i18n="game_filter">GameFilter</button>
   <button class="action" onclick="post('api/update_ipset')" data-i18n="update_ipset">Update IPSet</button>
@@ -187,6 +188,7 @@ function pollStatus(){
     t.setAttribute('data-i18n', j2.running?'running':'stopped');
     d.style.background = j2.running?'#22cc55':'#cc3333';
     document.getElementById('admin-warn').style.display = j2.admin===false?'inline':'none';
+    document.getElementById('cur-strat').textContent = j2.strategy || '—';
     const pw=document.getElementById('payload-warn');
     if(j2.payloads_ok===false){
       pw.style.display='inline';
@@ -211,6 +213,7 @@ const I18N={
       payload_warn:'⚠ missing payload (.bin) — click to restore',
       main_title:'Protection',cur_strat:'Current strategy:',start:'Start',stop:'Stop',
       update_btn:'Update (check_updates)',strategy:'Strategy',game_filter:'GameFilter',
+      elevate:'Admin (elevate)',
       update_ipset:'Update IPSet',update_hosts:'Update Hosts',
       service_title:'Windows Service (SCM)',service_desc:'Manages the zapret service via SCM (pywin32), no service.bat.',
       service_install:'Install Service',service_uninstall:'Uninstall Service',

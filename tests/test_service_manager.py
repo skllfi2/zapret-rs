@@ -171,6 +171,50 @@ class TestServiceManager(unittest.TestCase):
         r = restore_payloads(dest_dir="C:\\x", source_dir="C:\\x\\")
         self.assertFalse(r["ok"])
 
+    def test_parse_strategy_args(self):
+        import service_manager as s
+        # general.bat существует в любой копии zapret — парсим по-настоящему
+        args, err = s.parse_strategy_args("general")
+        self.assertIsNone(err, err)
+        self.assertTrue(args)
+        self.assertTrue(any(a.startswith("--wf-tcp=") for a in args))
+        self.assertTrue(any("winws" in a.lower() or a.endswith(".exe") or "bin" in a.lower()
+                            for a in args))
+        # несуществующая стратегия — честная ошибка
+        args2, err2 = s.parse_strategy_args("no-such-strategy")
+        self.assertIsNone(args2)
+        self.assertIn("не найден", err2)
+
+    def test_parse_strategy_reassembles_caret_lines(self):
+        # .bat пишет аргументы длинными строками с продолжением через ^
+        import tempfile, shutil, os as _os
+        import service_manager as s
+        d = tempfile.mkdtemp()
+        try:
+            bat = _os.path.join(d, "test-strategy.bat")
+            with open(bat, "w", encoding="utf-8") as f:
+                f.write('@echo off\r\nset "BIN=%~dp0bin\\"r\n'
+                        'start "x" /min "%BIN%winws.exe" --wf-tcp=80,443 ^\r\n'
+                        '--filter-tcp=443 --hostlist="%LISTS%list-general.txt" ^\r\n'
+                        '--dpi-desync=fake --new\r\n')
+            with mock.patch.object(s, "ORIG_DIR", d), \
+                 mock.patch.object(s, "BIN_DIR", _os.path.join(d, "bin")), \
+                 mock.patch.object(s, "LISTS_DIR", _os.path.join(d, "lists")):
+                args, err = s.parse_strategy_args("test-strategy")
+            self.assertIsNone(err, err)
+            # все три строки склеены в один список аргументов
+            self.assertEqual(args, ["--wf-tcp=80,443", "--filter-tcp=443",
+                                    '--hostlist="' + _os.path.join(d, "lists") + '\\list-general.txt"',
+                                    "--dpi-desync=fake", "--new"])
+        finally:
+            shutil.rmtree(d, ignore_errors=True)
+
+    def test_current_strategy_file(self):
+        import service_manager as s
+        # Файл либо отсутствует (None), либо содержит непустую стратегию
+        cur = s.current_strategy()
+        self.assertTrue(cur is None or isinstance(cur, str))
+
     def test_find_payload_source_env(self):
         # ZAPRET_PAYLOADS_DIR имеет приоритет
         import tempfile

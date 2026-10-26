@@ -1,6 +1,6 @@
 # service_manager.py — полная замена service.bat (SCM + winws.exe управление)
 # Без вызова .bat файлов — всё через pywin32 + subprocess (CREATE_NO_WINDOW)
-import os, subprocess, time, threading, sys, winreg, ctypes
+import os, re, shlex, subprocess, time, threading, sys, winreg, ctypes
 import win32serviceutil, win32service, win32con
 
 # === Автоопределение каталога zapret (без хардкода одной копии) ===
@@ -344,7 +344,7 @@ def hidden_cmd(cmd_list, cwd=ORIG_DIR, timeout=30):
 
 def find_payload_source():
     """Ищем каталог с *.bin payload-файлами для восстановления.
-    Порядок: ZAPRET_PAYLOADS_DIR -> самый свежий AppWatch\Versions\<app>\*\bin."""
+    Порядок: ZAPRET_PAYLOADS_DIR -> самый свежий AppWatch/Versions/<app>/*/bin."""
     candidates = []
     env = os.environ.get("ZAPRET_PAYLOADS_DIR")
     if env:
@@ -406,6 +406,145 @@ def restore_payloads(dest_dir=None, source_dir=None):
             "copied": copied, "skipped": skipped,
             "stdout": f"Скопировано {len(copied)}, пропущено (уже были) {len(skipped)}. {pl['stdout']}",
             "stderr": pl.get("stderr", ""), "payloads": pl}
+
+
+# === СТРАТЕГИИ: разбор .bat и применение к службе (как :service_install в service.bat) ===
+
+def list_strategies():
+    """Реальные стратегии = .bat файлы каталога zapret (кроме service*)."""
+    try:
+        return [os.path.splitext(f)[0] for f in sorted(os.listdir(ORIG_DIR))
+                if f.lower().endswith(".bat") and not f.lower().startswith("service")]
+    except OSError:
+        return []
+
+def _game_filter_ranges():
+    """Эффективные диапазоны как в :game_switch_status: для выключенного направления — 12
+    (заглушка: winws получает порт, на котором трафика нет)."""
+    gf = game_filter_status()
+    mode, tcp, udp = gf.get("mode", "disabled"), gf.get("tcp", "1024-65535"), gf.get("udp", "1024-65535")
+    if mode == "all":
+        return tcp, udp
+    if mode == "tcp":
+        return tcp, "12"
+    if mode == "udp":
+        return "12", udp
+    return "12", "12"
+
+def parse_strategy_args(strategy_id):
+    """Разбирает выбранный .bat и возвращает список аргументов winws.exe.
+    Понимает продолжения строк через ^, кавычки и переменные %BIN%/%LISTS%/%GameFilter*%."""
+    bat = os.path.join(ORIG_DIR, strategy_id + ".bat")
+    if not os.path.isfile(bat):
+        return None, f"Файл стратегии не найден: {bat}"
+    try:
+        with open(bat, encoding="utf-8", errors="replace") as f:
+            text = f.read()
+    except OSError as e:
+        return None, str(e)
+    # Склеиваем продолжения строк (caret) и вырезаем служебные строки
+    logical = []
+    for raw in text.replace("\r\n", "\n").split("\n"):
+        line = raw.strip()
+        if not line or line.startswith("::") or line.startswith("@") or line.startswith("REM"):
+            continue
+        if line.endswith("^"):
+            logical.append(line[:-1].rstrip())
+            continue
+        if logical:
+            logical.append(line)
+            logical_text = " ".join(logical)
+            logical = []
+        else:
+            logical_text = line
+        if "winws.exe" not in logical_text:
+            continue
+        # Нашли строку запуска — отрезаем всё до winws.exe"
+        m = re.search(r'winws\.exe"\s*(.*)$', logical_text, re.IGNORECASE)
+        if not m:
+            continue
+        args_str = m.group(1)
+        tcp, udp = _game_filter_ranges()
+        bin_dir = BIN_DIR.rstrip("\\") + "\\"
+        lists_dir = LISTS_DIR.rstrip("\\") + "\\"
+        for var, val in [("%BIN%", bin_dir), ("%LISTS%", lists_dir),
+                         ("%GameFilterTCP%", tcp), ("%GameFilterUDP%", udp),
+                         ("%~dp0", ORIG_DIR.rstrip("\\") + "\\")]:
+            args_str = args_str.replace(var, val)
+        return shlex.split(args_str, posix=False), None
+    return None, f"В {strategy_id}.bat не найдена строка запуска winws.exe"
+
+def apply_strategy(strategy_id, restart=True):
+    """Применяет стратегию к службе zapret: пересоздаёт binPath (exeName+exeArgs)
+    и перезапускает службу. Требует прав администратора."""
+    args, err = parse_strategy_args(strategy_id)
+    if err:
+        return {"ok": False, "service": err, "strategy": strategy_id}
+    if not is_admin():
+        return {"ok": False, "strategy": strategy_id,
+                "service": "Нет прав администратора — перезапусти приложение от администратора "
+                           "(кнопка «Admin») и повтори"}
+    exe = os.path.join(BIN_DIR, "winws.exe")
+    exe_args = " ".join(f'"{a}"' if (" " in a and not (a.startswith('"') and a.endswith('"'))) else a
+                        for a in args)
+    try:
+        exists = win32serviceutil.QueryServiceStatus(SERVICE_NAME) is not None
+    except Exception:
+        exists = False
+    try:
+        if exists:
+            try:
+                if is_running():
+                    win32serviceutil.StopService(SERVICE_NAME)
+                    for _ in range(20):  # ждём остановки, до 10 с
+                        time.sleep(0.5)
+                        if query_status() == "Stopped":
+                            break
+            except Exception:
+                pass  # служба и так остановлена
+            win32serviceutil.ChangeServiceConfig(SERVICE_NAME, exeName=exe, exeArgs=exe_args,
+                                                 startType=win32service.SERVICE_AUTO_START,
+                                                 description=f"zapret ({strategy_id})")
+        else:
+            win32serviceutil.InstallService(exe, SERVICE_NAME, SERVICE_DISPLAY,
+                                            startType=win32service.SERVICE_AUTO_START,
+                                            exeArgs=exe_args, description=f"zapret ({strategy_id})")
+        started = ""
+        if restart:
+            win32serviceutil.StartService(SERVICE_NAME)
+            started = ", служба запущена"
+        # Запоминаем выбранную стратегию для отображения в статусе
+        try:
+            with open(os.path.join(os.path.dirname(os.path.abspath(__file__)), ".strategy"), "w",
+                      encoding="utf-8") as f:
+                f.write(strategy_id)
+        except OSError:
+            pass
+        return {"ok": True, "strategy": strategy_id, "args_count": len(args),
+                "service": f"Стратегия {strategy_id} применена ({len(args)} аргументов){started}"}
+    except Exception as e:
+        return {"ok": False, "strategy": strategy_id, "service": str(e)}
+
+
+def current_strategy():
+    """Последняя применённая стратегия (файл .strategy рядом с main.py)."""
+    p = os.path.join(os.path.dirname(os.path.abspath(__file__)), ".strategy")
+    try:
+        with open(p, encoding="utf-8") as f:
+            return f.read().strip()
+    except OSError:
+        return None
+
+
+def relaunch_as_admin():
+    """Перезапуск текущего приложения с повышением прав (UAC).
+    args = argv целиком (включая имя скрипта), иначе запустится пустой python."""
+    try:
+        args = " ".join(f'"{a}"' for a in sys.argv)
+        h = ctypes.windll.shell32.ShellExecuteW(None, "runas", sys.executable, args, None, 1)
+        return h > 32  # >32 = успех
+    except Exception:
+        return False
 
 
 def payloads_status(bin_dir=None):
@@ -479,4 +618,10 @@ def run_service_action(action="status_zapret", arg="", **kwargs):
             return {"ok": True, "service": f"service={query_status()}, winws_running={winws_is_running()}"}
         except Exception as e:
             return {"ok": True, "service": f"test error: {e}"}
+    if action == "apply_strategy":
+        return apply_strategy(kwargs.get("strategy") or arg)
+    if action == "relaunch_admin":
+        ok = relaunch_as_admin()
+        return {"ok": ok, "service": "Перезапуск с правами администратора" if ok
+                else "Не удалось запустить с повышением прав"}
     return {"ok": False, "service": f"Unknown action: {action}"}

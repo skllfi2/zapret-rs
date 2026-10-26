@@ -127,10 +127,32 @@ class TestMainEndpoints(unittest.TestCase):
         r = self.c.post("/api/set_strategy", data={"id": "no-such-strategy"}, headers=self.h).get_json()
         self.assertFalse(r["ok"])
 
-    def test_set_strategy_known(self):
-        r = self.c.post("/api/set_strategy", data={"id": "general"}, headers=self.h).get_json()
-        self.assertTrue(r["ok"])
-        self.assertTrue(r["bat"].endswith("general.bat"))
+    def test_set_strategy_parses_bat(self):
+        # Реальная стратегия general.bat парсится; без админа — честный отказ, но аргументы разобраны
+        with mock.patch("main.service_manager.is_admin", return_value=False):
+            r = self.c.post("/api/set_strategy", data={"id": "general"}, headers=self.h).get_json()
+        self.assertFalse(r["ok"])
+        self.assertEqual(r["strategy"], "general")
+        self.assertIn("администратор", r["service"])
+
+    def test_set_strategy_applies_with_admin(self):
+        with mock.patch("main.service_manager.is_admin", return_value=True), \
+             mock.patch("main.service_manager.win32serviceutil") as w, \
+             mock.patch("main.service_manager.query_status", return_value="Stopped"), \
+             mock.patch("main.service_manager.is_running", return_value=False), \
+             mock.patch("main.service_manager.start_service", return_value=(True, "ok")):
+            w.QueryServiceStatus.side_effect = Exception("not installed")
+            r = self.c.post("/api/set_strategy", data={"id": "general"}, headers=self.h).get_json()
+        self.assertTrue(r["ok"], r)
+        self.assertGreater(r["args_count"], 10)
+
+    def test_dns_rebinding_blocked(self):
+        # Чужой Host (вредоносный домен, перепривязанный на 127.0.0.1) должен получать 403
+        for host in ["evil.example:8765", "127.0.0.1.evil.example:8765"]:
+            r = self.c.get("/api/status", headers={"Host": host})
+            self.assertEqual(r.status_code, 403, host)
+        # Наш адрес — проходит
+        self.assertEqual(self.c.get("/api/status", headers={"Host": "127.0.0.1:8765"}).status_code, 200)
 
 
 if __name__ == "__main__":

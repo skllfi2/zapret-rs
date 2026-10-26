@@ -14,6 +14,13 @@ app = Flask(__name__)
 ORIG_DIR = service_manager.ORIG_DIR
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 CSRF_TOKEN = os.urandom(24).hex()  # живёт только до перезапуска сервера
+ALLOWED_HOSTS = {"127.0.0.1:8765", "localhost:8765", "127.0.0.1", "localhost"}
+
+@app.before_request
+def _guard_host():
+    # Защита от DNS rebinding: чужой Host не должен ходить по API, иначе токен читается
+    if request.host not in ALLOWED_HOSTS:
+        abort(403, description="Host not allowed")
 
 def _check_csrf():
     """Мутирующие запросы: только POST + валидный токен."""
@@ -46,6 +53,7 @@ def status():
                         "payloads_ok": pl["ok"],
                         "payloads_missing": len(pl["missing"]),
                         "payloads_total": pl["total"],
+                        "strategy": service_manager.current_strategy(),
                         "dir": ORIG_DIR})
     except Exception as e:
         return jsonify({"running": False, "service": f"ERR:{e}"})
@@ -76,14 +84,7 @@ def hosts_check(): return jsonify(run_service_action("update_hosts"))
 
 @app.route("/api/strategies")
 def strategies():
-    # Реальные стратегии = .bat файлы в каталоге zapret (кроме service*)
-    ids = []
-    try:
-        for f in sorted(os.listdir(ORIG_DIR)):
-            if f.lower().endswith(".bat") and not f.lower().startswith("service"):
-                ids.append(os.path.splitext(f)[0])
-    except OSError:
-        pass
+    ids = service_manager.list_strategies()
     return jsonify({"strategies": [{"id": i, "name": i} for i in ids]})
 
 @app.route("/api/lists")
@@ -160,12 +161,13 @@ def replace_fakes():
 def set_strat():
     if _check_csrf(): return _check_csrf()
     sid = request.form.get("id") or request.args.get("id", "general")
-    bat = os.path.join(ORIG_DIR, sid + ".bat")
-    if not os.path.isfile(bat):
-        return jsonify({"ok": False, "strategy": sid, "msg": f"Файл стратегии не найден: {sid}.bat"})
-    return jsonify({"ok": True, "strategy": sid, "bat": bat,
-                    "msg": f"Стратегия {sid} готова к запуску ({sid}.bat). "
-                           "Служба использует свою строку winws — перезапуск через service.bat."})
+    # Реальное применение: разбор .bat -> binPath службы -> перезапуск (нужен админ)
+    return jsonify(run_service_action("apply_strategy", strategy=sid))
+
+@app.route("/api/elevate", methods=["POST"])
+def elevate():
+    if _check_csrf(): return _check_csrf()
+    return jsonify(run_service_action("relaunch_admin"))
 
 @app.route("/api/clear_discord", methods=["POST"])
 def clear_discord():

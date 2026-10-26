@@ -71,6 +71,7 @@ class ZapretApp:
         # Buttons grid: 4 columns, clean rounded buttons
         btn_defs = [
             ("Status", lambda: self.run_action("service_status")),
+            ("Admin (права)", lambda: self.run_action("relaunch_admin")),
             ("Install Svc", lambda: self.run_action("service_install")),
             ("Uninstall", lambda: self.run_action("service_remove")),
             ("Start", lambda: self.run_action("start")),
