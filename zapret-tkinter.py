@@ -56,6 +56,10 @@ class ZapretApp:
         self.dot.pack(side="left", padx=(0, 8))
         self.status_text = tk.Label(status_pill_frame, text="Неизвестно", font=("Segoe UI", 10, "bold"), fg=COLORS["text_secondary"], bg=COLORS["bg_main"])
         self.status_text.pack(side="left")
+        self.payload_warn = tk.Label(status_pill_frame, text="", font=("Segoe UI", 9, "bold"),
+                                     fg=COLORS["danger"], bg=COLORS["bg_main"], cursor="hand2")
+        self.payload_warn.pack(side="left", padx=(10, 0))
+        self.payload_warn.bind("<Button-1>", lambda e: self.run_action("restore_payloads"))
 
         # Main content card
         content = tk.Frame(self.root, bg=COLORS["bg_card"], bd=0)
@@ -131,6 +135,15 @@ class ZapretApp:
             self.status_text.config(text=f"ERR: {str(e)[:30]}", fg=COLORS["danger"])
             self.dot.delete("all")
             self.dot.create_oval(2, 2, 12, 12, fill=COLORS["danger"], outline="")
+        # Предупреждение о недостающих payload-файлах (клик = восстановить)
+        try:
+            pl = service_manager.payloads_status()
+            if pl["ok"]:
+                self.payload_warn.config(text="")
+            else:
+                self.payload_warn.config(text=f"⚠ нет .bin: {len(pl['missing'])} — клик для восстановления")
+        except Exception:
+            self.payload_warn.config(text="")
 
     def append_output(self, text):
         self.output.config(state="normal")

@@ -38,10 +38,14 @@ def index():
 @app.route("/api/status")
 def status():
     try:
+        pl = service_manager.payloads_status()
         return jsonify({"running": service_manager.is_running(),
                         "service": service_manager.query_status(),
                         "winws": service_manager.winws_is_running(),
                         "admin": service_manager.is_admin(),
+                        "payloads_ok": pl["ok"],
+                        "payloads_missing": len(pl["missing"]),
+                        "payloads_total": pl["total"],
                         "dir": ORIG_DIR})
     except Exception as e:
         return jsonify({"running": False, "service": f"ERR:{e}"})

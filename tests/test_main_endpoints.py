@@ -27,16 +27,22 @@ class TestMainEndpoints(unittest.TestCase):
         self.assertNotIn(b"__CSRF_TOKEN__", r.data)
 
     def test_status_shape(self):
+        fake_pl = {"ok": True, "missing": [], "total": 16, "stdout": "stub", "stderr": ""}
         with mock.patch("main.service_manager.query_status", return_value="Running"), \
              mock.patch("main.service_manager.is_running", return_value=True), \
              mock.patch("main.service_manager.winws_is_running", return_value=True), \
-             mock.patch("main.service_manager.is_admin", return_value=False):
+             mock.patch("main.service_manager.is_admin", return_value=False), \
+             mock.patch("main.service_manager.payloads_status", return_value=fake_pl):
             r = self.c.get("/api/status").get_json()
         self.assertEqual(r["running"], True)
         self.assertEqual(r["service"], "Running")
         self.assertIn("winws", r)
         self.assertIn("admin", r)
         self.assertIn("dir", r)
+        # payload-файлы видны в статусе — UI предупреждает о их отсутствии
+        self.assertTrue(r["payloads_ok"])
+        self.assertEqual(r["payloads_missing"], 0)
+        self.assertEqual(r["payloads_total"], 16)
 
     def test_strategies_from_disk(self):
         r = self.c.get("/api/strategies").get_json()

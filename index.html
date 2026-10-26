@@ -36,6 +36,8 @@ body[data-theme="light"] select{background:#fff;color:#222;border-color:#ccc}
     <span class="status-dot" id="dot"></span>
     <span id="stat-text" data-i18n="stopped">Остановлено</span>
     <span id="admin-warn" style="color:#e8a060;display:none" data-i18n="need_admin">⚠ нет прав админа</span>
+    <span id="payload-warn" style="color:#e86060;display:none;cursor:pointer;text-decoration:underline"
+          onclick="post('api/restore_payloads')" data-i18n="payload_warn">⚠ нет payload-файлов (.bin)</span>
   </div>
   <div style="display:flex;gap:8px;align-items:center">
     <label style="font-size:12px;color:#777" data-i18n="theme">Тема:</label>
@@ -185,6 +187,12 @@ function pollStatus(){
     t.setAttribute('data-i18n', j2.running?'running':'stopped');
     d.style.background = j2.running?'#22cc55':'#cc3333';
     document.getElementById('admin-warn').style.display = j2.admin===false?'inline':'none';
+    const pw=document.getElementById('payload-warn');
+    if(j2.payloads_ok===false){
+      pw.style.display='inline';
+      const base=RU_SOURCE['payload_warn']||pw.textContent;
+      pw.textContent=`${I18N_LANG==='en'?I18N.en.payload_warn:base} (${j2.payloads_missing})`;
+    } else pw.style.display='none';
   }).catch(()=>{});
   setTimeout(pollStatus, 3000);
 }
@@ -200,6 +208,7 @@ const I18N={
   ru:{ok:'OK',err:'ERR',running:'Работает',stopped:'Остановлено',need_admin:'⚠ нет прав админа',
       fake_type_prompt:'Тип fake: 1 = Discord UDP, 2 = GameFilter UDP',fake_num_prompt:'Номер fake-файла (см. список)'},
   en:{title:'Zapret',nav_main:'Main',nav_service:'Service',nav_diag:'Diagnostics',nav_lists:'Lists',
+      payload_warn:'⚠ missing payload (.bin) — click to restore',
       main_title:'Protection',cur_strat:'Current strategy:',start:'Start',stop:'Stop',
       update_btn:'Update (check_updates)',strategy:'Strategy',game_filter:'GameFilter',
       update_ipset:'Update IPSet',update_hosts:'Update Hosts',
