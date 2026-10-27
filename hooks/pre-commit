@@ -1,0 +1,12 @@
+#!/bin/sh
+# pre-commit hook zapret-simple: ruff + юнит-тесты перед каждым коммитом.
+# Подключается через: git config core.hooksPath hooks
+PY="C:/Users/dexox/AppData/Local/Python/pythoncore-3.15-64/python.exe"
+
+echo "[pre-commit] ruff check ..."
+"$PY" -m ruff check . || exit 1
+
+echo "[pre-commit] unittest discover -s tests ..."
+PYTHONUTF8=1 "$PY" -X utf8 -m unittest discover -s tests -q || exit 1
+
+echo "[pre-commit] OK"
