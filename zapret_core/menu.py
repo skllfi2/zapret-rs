@@ -1,8 +1,9 @@
 # menu.py — шапка меню одним запросом (версия + стратегия + три тумблера)
-from .settings import local_version, game_filter_label, check_updates_flag
 from .lists import ipset_status
-from .strategies import current_strategy
 from .misc import is_admin
+from .settings import check_updates_flag, game_filter_label, local_version
+from .strategies import current_strategy
+
 
 def menu_status():
     """Все статусы шапки оригинального меню одним запросом."""

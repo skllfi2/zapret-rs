@@ -1,11 +1,17 @@
 # diagnostics.py — полный порт :service_diagnostics из service.bat
 # Каждая проверка даёт уровень: ok (зелёный) / warn (жёлтый) / bad (красный) —
 # ровно как PrintGreen/PrintYellow/PrintRed в оригинале.
-import os, re, subprocess, winreg
+import os
+import re
+import subprocess
+import winreg
+
 from i18n import t
-from .paths import ORIG_DIR, BIN_DIR
+
 from .misc import is_admin
+from .paths import BIN_DIR, ORIG_DIR
 from .winws import winws_is_running
+
 
 def tcp_timestamps():
     try:
@@ -93,7 +99,7 @@ def run_diagnostics():
                            capture_output=True, text=True, errors="replace",
                            creationflags=0x08000000, timeout=20)
         out = (r.stdout or "").lower()
-        ts_line = next((l for l in out.splitlines() if "timestamp" in l), "")
+        ts_line = next((ln for ln in out.splitlines() if "timestamp" in ln), "")
         if "enabled" in ts_line and "dis" not in ts_line:
             checks.append(_check("TCP timestamps", "ok", t("diag.ts_ok")))
         else:

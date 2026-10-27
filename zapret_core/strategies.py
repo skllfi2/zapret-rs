@@ -1,12 +1,18 @@
 # strategies.py — разбор стратегий (*.bat) и применение их к службе zapret
-import os, re, shlex, time
-import win32serviceutil, win32service
+import os
+import re
+import shlex
+import time
+
+import win32service
+import win32serviceutil
+
 from i18n import t
-from .paths import (ORIG_DIR, BIN_DIR, LISTS_DIR, SERVICE_NAME, SERVICE_DISPLAY,
-                    STRATEGY_FILE)
-from .settings import game_filter_status
-from .scm import query_status, is_running
+
 from .misc import is_admin
+from .paths import BIN_DIR, LISTS_DIR, ORIG_DIR, SERVICE_DISPLAY, SERVICE_NAME, STRATEGY_FILE
+from .scm import is_running, query_status
+from .settings import game_filter_status
 
 # === СТРАТЕГИИ: разбор .bat и применение к службе (как :service_install в service.bat) ===
 

@@ -1,8 +1,12 @@
 # settings.py — тумблеры и статусы как в шапке меню service.bat:
 # game_filter.enabled, check_updates.enabled, LOCAL_VERSION
-import os, re
+import os
+import re
+
 from i18n import t
+
 from .paths import ORIG_DIR
+
 
 def game_filter_status():
     """Чтение utils/game_filter.enabled (как :game_switch_status в service.bat)."""
@@ -25,11 +29,15 @@ def game_filter_status():
                     info["mode"] = "all"
                 elif kl == "tcp":
                     # как в service.bat: tcp без значения = режим, со значением = диапазон
-                    if v: info["tcp"] = v
-                    else: info["mode"] = "tcp"
+                    if v:
+                        info["tcp"] = v
+                    else:
+                        info["mode"] = "tcp"
                 elif kl == "udp":
-                    if v: info["udp"] = v
-                    else: info["mode"] = "udp"
+                    if v:
+                        info["udp"] = v
+                    else:
+                        info["mode"] = "udp"
         info["enabled"] = info["mode"] != "disabled"
         info["stdout"] = f"mode={info['mode']}, tcp={info['tcp']}, udp={info['udp']}"
         return {"ok": True, **info}

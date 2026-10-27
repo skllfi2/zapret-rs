@@ -1,11 +1,15 @@
 # updates.py — проверка обновлений zapret (локальная версия vs GitHub)
 import os
+
 from i18n import t
+
 from .paths import ORIG_DIR
+
 
 def check_updates():
     """Сравнение локальной версии (LOCAL_VERSION из service.bat) с GitHub (как :service_check_updates)."""
-    import re, urllib.request
+    import re
+    import urllib.request
     enabled_path = os.path.join(ORIG_DIR, "utils", "check_updates.enabled")
     if not os.path.exists(enabled_path):
         return {"ok": True, "stdout": t("sm.updates_disabled"),

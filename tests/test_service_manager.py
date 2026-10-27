@@ -1,7 +1,11 @@
 # tests/test_service_manager.py — 100% coverage of service_manager functions
-import unittest, sys, os
+import os
+import sys
+import unittest
+
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 import unittest.mock as mock
+
 
 class TestServiceManager(unittest.TestCase):
     def test_install_service(self):
@@ -32,19 +36,20 @@ class TestServiceManager(unittest.TestCase):
         # QueryServiceStatus возвращает (type, state, ...); state — индекс 1
         fake = (16, 4, 5, 0, 0, 0, 0)  # type=WIN32_OWN_PROCESS, state=RUNNING
         with mock.patch("service_manager.win32serviceutil.QueryServiceStatus", return_value=fake):
-            from service_manager import query_status, is_running
+            from service_manager import is_running, query_status
             self.assertEqual(query_status(), "Running")
             self.assertTrue(is_running())
         stopped = (16, 1, 0, 0, 0, 0, 0)
         with mock.patch("service_manager.win32serviceutil.QueryServiceStatus", return_value=stopped):
-            from service_manager import query_status, is_running
+            from service_manager import is_running, query_status
             self.assertEqual(query_status(), "Stopped")
             self.assertFalse(is_running())
 
     def test_start_stop_service(self):
         from service_manager import start_service, stop_service
         with mock.patch("service_manager.subprocess.run"):
-            start_service(); stop_service()
+            start_service()
+            stop_service()
 
     def test_replace_fakes(self):
         # Удаление payload-файлов запрещено: функция обязана вернуть отказ и ничего не удалять
@@ -68,7 +73,6 @@ class TestServiceManager(unittest.TestCase):
         self.assertIn("tcp", r)
         self.assertIn("udp", r)
         # Мок: файл с mode=all
-        import io
         with mock.patch("service_manager.os.path.isfile", return_value=True), \
              mock.patch("builtins.open", mock.mock_open(read_data="mode=all\ntcp=100-200\nudp=300-400\n")):
             r2 = game_filter_status()
@@ -119,8 +123,9 @@ class TestServiceManager(unittest.TestCase):
 
     def test_detect_orig_dir(self):
         # Каталог должен содержать bin\winws.exe; хардкода одной копии больше нет
-        from service_manager import ORIG_DIR, BIN_DIR
         import os
+
+        from service_manager import BIN_DIR, ORIG_DIR
         self.assertTrue(ORIG_DIR, "ORIG_DIR пуст")
         self.assertEqual(BIN_DIR, os.path.join(ORIG_DIR, "bin"))
         self.assertTrue(os.path.isfile(os.path.join(ORIG_DIR, "bin", "winws.exe")),
@@ -143,17 +148,23 @@ class TestServiceManager(unittest.TestCase):
         self.assertEqual(r2["missing"], [])
 
     def test_restore_payloads(self):
-        import tempfile, shutil
+        import shutil
+        import tempfile
+
         from service_manager import restore_payloads
-        src = tempfile.mkdtemp(); dst = tempfile.mkdtemp()
+        src = tempfile.mkdtemp()
+        dst = tempfile.mkdtemp()
         try:
             # обязательные + лишний не-.bin файл
             for n in ["ACTIVE_DISCORD_UDP.bin", "ACTIVE_GAME_UDP.bin",
                       "quic_initial_www_google_com.bin", "tls_clienthello_www_google_com.bin"]:
-                with open(os.path.join(src, n), "wb") as f: f.write(b"\x00" * 16)
-            with open(os.path.join(src, "winws.exe"), "wb") as f: f.write(b"MZ")
+                with open(os.path.join(src, n), "wb") as f:
+                    f.write(b"\x00" * 16)
+            with open(os.path.join(src, "winws.exe"), "wb") as f:
+                f.write(b"MZ")
             # в назначении уже лежит один файл — его перезаписывать нельзя
-            with open(os.path.join(dst, "ACTIVE_GAME_UDP.bin"), "wb") as f: f.write(b"MANUAL")
+            with open(os.path.join(dst, "ACTIVE_GAME_UDP.bin"), "wb") as f:
+                f.write(b"MANUAL")
             r = restore_payloads(dest_dir=dst, source_dir=src)
             self.assertTrue(r["ok"], r)
             self.assertIn("ACTIVE_DISCORD_UDP.bin", r["copied"])
@@ -164,7 +175,8 @@ class TestServiceManager(unittest.TestCase):
             r2 = restore_payloads(dest_dir=dst, source_dir=src)
             self.assertEqual(r2["copied"], [])
         finally:
-            shutil.rmtree(src, ignore_errors=True); shutil.rmtree(dst, ignore_errors=True)
+            shutil.rmtree(src, ignore_errors=True)
+            shutil.rmtree(dst, ignore_errors=True)
 
     def test_restore_payloads_same_dir_refused(self):
         from service_manager import restore_payloads
@@ -173,7 +185,6 @@ class TestServiceManager(unittest.TestCase):
 
     def test_parse_strategy_args(self):
         import service_manager as s
-        import zapret_core.strategies as strat
         # general.bat существует в любой копии zapret — парсим по-настоящему
         args, err = s.parse_strategy_args("general")
         self.assertIsNone(err, err)
@@ -188,7 +199,10 @@ class TestServiceManager(unittest.TestCase):
 
     def test_parse_strategy_reassembles_caret_lines(self):
         # .bat пишет аргументы длинными строками с продолжением через ^
-        import tempfile, shutil, os as _os
+        import os as _os
+        import shutil
+        import tempfile
+
         import service_manager as s
         import zapret_core.strategies as strat
         d = tempfile.mkdtemp()
@@ -219,18 +233,21 @@ class TestServiceManager(unittest.TestCase):
 
     def test_find_payload_source_env(self):
         # ZAPRET_PAYLOADS_DIR имеет приоритет
+        import shutil
         import tempfile
+
         from service_manager import find_payload_source
         d = tempfile.mkdtemp()
         try:
-            with open(os.path.join(d, "a.bin"), "wb") as f: f.write(b"x")
+            with open(os.path.join(d, "a.bin"), "wb") as f:
+                f.write(b"x")
             with mock.patch.dict("os.environ", {"ZAPRET_PAYLOADS_DIR": d}):
                 self.assertEqual(find_payload_source(), d)
         finally:
-            import shutil; shutil.rmtree(d, ignore_errors=True)
+            shutil.rmtree(d, ignore_errors=True)
 
     def test_hidden_cmd_get_bin(self):
-        from service_manager import get_bin_path, hidden_cmd
+        from service_manager import get_bin_path
         with mock.patch("service_manager.os.path.dirname", return_value="C:\\fake"):
             p = get_bin_path()
             self.assertTrue(isinstance(p, str))
@@ -327,7 +344,9 @@ class TestServiceManager(unittest.TestCase):
 
     def test_toggle_ipset_cycle(self):
         # Цикл loaded->none->any->loaded с backup-файлом (как :ipset_switch)
-        import tempfile, shutil
+        import shutil
+        import tempfile
+
         from service_manager import ipset_status, toggle_ipset
         d = tempfile.mkdtemp()
         lf = os.path.join(d, "ipset-all.txt")
@@ -336,15 +355,23 @@ class TestServiceManager(unittest.TestCase):
         try:
             with mock.patch("zapret_core.lists.LISTS_DIR", d):
                 self.assertEqual(ipset_status(), "loaded")
-                r = toggle_ipset(); self.assertTrue(r["ok"]); self.assertEqual(ipset_status(), "none")
-                r = toggle_ipset(); self.assertTrue(r["ok"]); self.assertEqual(ipset_status(), "any")
-                r = toggle_ipset(); self.assertTrue(r["ok"]); self.assertEqual(ipset_status(), "loaded")
+                r = toggle_ipset()
+                self.assertTrue(r["ok"])
+                self.assertEqual(ipset_status(), "none")
+                r = toggle_ipset()
+                self.assertTrue(r["ok"])
+                self.assertEqual(ipset_status(), "any")
+                r = toggle_ipset()
+                self.assertTrue(r["ok"])
+                self.assertEqual(ipset_status(), "loaded")
         finally:
             shutil.rmtree(d, ignore_errors=True)
 
     def test_set_game_filter_writes_file(self):
-        import tempfile, shutil
-        from service_manager import set_game_filter, game_filter_label
+        import shutil
+        import tempfile
+
+        from service_manager import game_filter_label, set_game_filter
         d = tempfile.mkdtemp()
         try:
             with mock.patch("zapret_core.settings.ORIG_DIR", d):
@@ -357,15 +384,19 @@ class TestServiceManager(unittest.TestCase):
             shutil.rmtree(d, ignore_errors=True)
 
     def test_toggle_check_updates_flag_file(self):
-        import tempfile, shutil
-        from service_manager import toggle_check_updates, check_updates_flag
+        import shutil
+        import tempfile
+
+        from service_manager import check_updates_flag, toggle_check_updates
         d = tempfile.mkdtemp()
         try:
             with mock.patch("zapret_core.settings.ORIG_DIR", d):
                 self.assertEqual(check_updates_flag(), "disabled")
-                r = toggle_check_updates(True); self.assertTrue(r["ok"])
+                r = toggle_check_updates(True)
+                self.assertTrue(r["ok"])
                 self.assertEqual(check_updates_flag(), "enabled")
-                r = toggle_check_updates(False); self.assertTrue(r["ok"])
+                r = toggle_check_updates(False)
+                self.assertTrue(r["ok"])
                 self.assertEqual(check_updates_flag(), "disabled")
         finally:
             shutil.rmtree(d, ignore_errors=True)

@@ -1,8 +1,14 @@
 # misc.py — общие помощники: права админа, скрытые команды, Discord, перезапуск UAC
-import os, subprocess, sys, ctypes
+import ctypes
+import os
+import subprocess
+import sys
+
 from i18n import t
-from .paths import ORIG_DIR
+
 from .lists import load_user_lists
+from .paths import ORIG_DIR
+
 
 def is_admin():
     try:

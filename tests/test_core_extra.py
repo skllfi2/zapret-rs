@@ -1,6 +1,11 @@
 # tests/test_core_extra.py — новые модули zapret_core: best_strategy, обновления,
 # хелперы диагностик, статусы списков/фильтров, лог applog
-import unittest, sys, os, tempfile, shutil, threading
+import os
+import shutil
+import sys
+import tempfile
+import threading
+import unittest
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 import unittest.mock as mock

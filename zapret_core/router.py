@@ -1,31 +1,35 @@
 # router.py — основной маршрутизатор действий UI (замена service.bat полностью)
 from i18n import t
-from .scm import (install_service, uninstall_service, query_status,
-                  start_service, stop_service)
-from .settings import game_filter_status, set_game_filter, toggle_check_updates
-from .lists import (load_user_lists, ipset_update, update_hosts, toggle_ipset)
-from .diagnostics import run_diagnostics, remove_conflicts
-from .tests_runner import tests_prerequisites, run_tests, best_strategy
-from .winws import (payloads_status, restore_payloads, winws_is_running,
-                    replace_fakes, list_fakes)
-from .updates import check_updates
-from .misc import admin_use, clear_discord, relaunch_as_admin
+
+from .diagnostics import remove_conflicts, run_diagnostics
+from .lists import ipset_update, load_user_lists, toggle_ipset, update_hosts
 from .menu import menu_status
+from .misc import admin_use, clear_discord, relaunch_as_admin
+from .scm import install_service, query_status, start_service, stop_service, uninstall_service
+from .settings import game_filter_status, set_game_filter, toggle_check_updates
 from .strategies import apply_strategy
+from .tests_runner import best_strategy, run_tests, tests_prerequisites
+from .updates import check_updates
+from .winws import list_fakes, payloads_status, replace_fakes, restore_payloads, winws_is_running
+
 
 def run_service_action(action="status_zapret", arg="", **kwargs):
     """Основной маршрутизатор — заменяет service.bat полностью.
     kwargs пробрасываются в функцию (например, fake_type/number для replace_active_fakes)."""
     if action == "service_install":
-        r = install_service(); return {"ok": r[0], "service": r[1]}
+        r = install_service()
+        return {"ok": r[0], "service": r[1]}
     if action == "service_remove":
-        r = uninstall_service(); return {"ok": r[0], "service": r[1]}
+        r = uninstall_service()
+        return {"ok": r[0], "service": r[1]}
     if action == "service_status":
         return {"ok": True, "service": query_status()}
     if action == "start":
-        r = start_service(); return {"ok": r[0], "service": r[1]}
+        r = start_service()
+        return {"ok": r[0], "service": r[1]}
     if action == "stop":
-        r = stop_service(); return {"ok": r[0], "service": r[1]}
+        r = stop_service()
+        return {"ok": r[0], "service": r[1]}
     if action == "load_game_filter":
         return game_filter_status()
     if action == "load_user_lists":

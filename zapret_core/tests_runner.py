@@ -2,11 +2,17 @@
 # Оригинал просто открывает PowerShell-окно. Здесь: пре-чеки те же, что в ps1,
 # запуск того же скрипта, ответы на его Read-Host (тип теста, режим) пишутся в stdin,
 # строки вывода отдаются колбэку on_line для живого показа в UI.
-import os, shutil, subprocess, time
+import os
+import shutil
+import subprocess
+import time
+
 import win32serviceutil
+
 from i18n import t
-from .paths import ORIG_DIR, SERVICE_NAME
+
 from .misc import is_admin
+from .paths import ORIG_DIR, SERVICE_NAME
 from .strategies import list_strategies
 
 # === ТЕСТЫ (порт :run_tests -> utils\test zapret.ps1) ===
@@ -101,8 +107,8 @@ def run_tests(on_line=None, test_type=1, mode=1, selection=None, timeout=1800):
         try:
             with open(res_file, encoding="utf-8", errors="replace") as f:
                 rdata = f.read()
-            best = next((l.strip() for l in rdata.splitlines()
-                         if l.strip().startswith("Best strategy:")), "")
+            best = next((ln.strip() for ln in rdata.splitlines()
+                         if ln.strip().startswith("Best strategy:")), "")
             tail = f" | {best or t('tests.results_saved')} ({os.path.basename(res_file)})"
         except OSError:
             pass
@@ -121,8 +127,8 @@ def best_strategy():
         return {"ok": False, "strategy": None, "reason": t("tests.best_none")}
     try:
         with open(res_file, encoding="utf-8", errors="replace") as f:
-            line = next((l.strip() for l in f
-                         if l.strip().startswith("Best strategy:")), "")
+            line = next((ln.strip() for ln in f
+                         if ln.strip().startswith("Best strategy:")), "")
     except OSError as e:
         return {"ok": False, "strategy": None, "reason": str(e)}
     if not line:

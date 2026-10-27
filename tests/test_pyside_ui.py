@@ -1,5 +1,7 @@
 # tests/test_pyside_ui.py — десктопный UI на PySide6: кнопки, стратегии, потоки
-import unittest, sys, os
+import os
+import sys
+import unittest
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 # Qt не должен требовать реального дисплея — рисуем в offscreen
@@ -24,9 +26,10 @@ class TestPySideUI(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
         # Импорт внутри setUpClass: QApplication создаётся один раз на процесс
-        import zapret_pyside as z
+        from PySide6.QtWidgets import QApplication, QComboBox, QLabel, QPushButton
+
         import i18n
-        from PySide6.QtWidgets import QApplication, QPushButton, QComboBox, QLabel
+        import zapret_pyside as z
         cls.z = z
         cls.i18n = i18n
         # Детерминированный язык: пункты меню сверяются с en-паритетом service.bat
@@ -59,8 +62,8 @@ class TestPySideUI(unittest.TestCase):
 
     def test_menu_sections_like_original(self):
         # Секции меню — как в service.bat: :: SERVICE/SETTINGS/UPDATES/TOOLS
-        secs = [l.text() for l in self.win.findChildren(self.QLabel)
-                if l.objectName() == "section"]
+        secs = [lb.text() for lb in self.win.findChildren(self.QLabel)
+                if lb.objectName() == "section"]
         for key in ["ui.sec_service", "ui.sec_settings", "ui.sec_updates", "ui.sec_tools"]:
             s = self.i18n.t(key)
             self.assertIn(s, secs, f"Секция {s} отсутствует")
@@ -166,9 +169,10 @@ class TestPySideTray(unittest.TestCase):
 
     @classmethod
     def setUpClass(cls):
-        import zapret_pyside as z
-        import i18n
         from PySide6.QtWidgets import QApplication, QSystemTrayIcon
+
+        import i18n
+        import zapret_pyside as z
         cls.z, cls.i18n = z, i18n
         cls.QSystemTrayIcon = QSystemTrayIcon
         cls.app = QApplication.instance() or QApplication([])

@@ -1,5 +1,7 @@
 # test_verify.py — офлайн-проверки zapret-simple без запуска окна (структура «только PySide6»)
-import os, sys
+import os
+import subprocess
+import sys
 
 ORIG = r"C:\Users\dexox\Pictures\zapret-discord-youtube"
 SIMPLE = r"F:\Development\Dev\mydev\zapret-simple"
@@ -7,29 +9,41 @@ SIMPLE = r"F:\Development\Dev\mydev\zapret-simple"
 errors = []
 
 def check(p, msg):
-    if not p: errors.append(msg)
-    else: print("  OK:", msg)
+    if not p:
+        errors.append(msg)
+    else:
+        print("  OK:", msg)
 
 print("=== Состав zapret-simple ===")
-for f in ["zapret_pyside.py", "service_manager.py", "i18n.py", "update.bat", "start-gui.bat"]:
+for f in ["zapret_pyside.py", "service_manager.py", "i18n.py", "update.bat",
+          "start-gui.bat", "build_exe.py", "ruff.toml"]:
     check(os.path.isfile(os.path.join(SIMPLE, f)), f"{f} существует")
-# Веб/tkinter-варианты удалены — единственный UI: PySide6
 for f in ["main.py", "index.html", "zapret-tkinter.py", "start.bat"]:
     check(not os.path.isfile(os.path.join(SIMPLE, f)), f"{f} удалён (оставлен только PySide6)")
+# Ядро разбито на пакет zapret_core (service_manager.py — публичный фасад)
+check(os.path.isdir(os.path.join(SIMPLE, "zapret_core")), "пакет zapret_core/ существует")
+for f in ["paths.py", "scm.py", "winws.py", "lists.py", "settings.py", "updates.py",
+          "strategies.py", "menu.py", "diagnostics.py", "tests_runner.py", "misc.py",
+          "router.py", "applog.py"]:
+    check(os.path.isfile(os.path.join(SIMPLE, "zapret_core", f)), f"zapret_core/{f} существует")
 
 print("\n=== Оригинальная копия zapret ===")
 check(os.path.isfile(os.path.join(ORIG, "service.bat")), "service.bat есть в оригинальной копии")
 check(os.path.isfile(os.path.join(ORIG, "general.bat")), "general.bat есть в оригинальной копии")
 
 print("\n=== Python 3.15+ ===")
-import subprocess
-res = subprocess.run([r"C:\Users\dexox\AppData\Local\Python\pythoncore-3.15-64\python.exe", "--version"], capture_output=True, text=True)
+res = subprocess.run([r"C:\Users\dexox\AppData\Local\Python\pythoncore-3.15-64\python.exe", "--version"], capture_output=True, text=True, check=False)
 check(res.stdout.strip().startswith("Python 3.15"), f"Python 3.15.x (фактически: {res.stdout.strip()})")
 
 print("\n=== Синтаксис исходников ===")
-for f in ["zapret_pyside.py", "service_manager.py", "i18n.py"]:
+for f in ["zapret_pyside.py", "service_manager.py", "i18n.py"] + [
+        f"zapret_core\\{f}" for f in ("paths.py", "scm.py", "winws.py", "lists.py", "settings.py",
+                                      "updates.py", "strategies.py", "menu.py", "diagnostics.py",
+                                      "tests_runner.py", "misc.py", "router.py", "applog.py")]:
+    with open(os.path.join(SIMPLE, f), encoding="utf-8") as fh:
+        src_text = fh.read()
     try:
-        compile(open(os.path.join(SIMPLE, f), encoding="utf-8").read(), f, "exec")
+        compile(src_text, f, "exec")
         check(True, f"{f} синтаксически верен")
     except Exception as e:
         check(False, f"{f} ошибка: {e}")
@@ -61,7 +75,8 @@ check("flask" not in req.lower().replace("#", ""), "flask удалён (веб-�
 
 print("\n=== Итог ===")
 if errors:
-    for e in errors: print("  ОШИБКА:", e)
+    for e in errors:
+        print("  ОШИБКА:", e)
     sys.exit(1)
 else:
     print("  ВСЕ ПРОВЕРКИ ПРОШЛИ — готово без запуска окна.")

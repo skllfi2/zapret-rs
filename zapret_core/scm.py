@@ -1,8 +1,14 @@
 # scm.py — установка/запуск/остановка службы zapret (SCM, pywin32 + sc)
-import os, subprocess
-import win32serviceutil, win32service
+import os
+import subprocess
+
+import win32service
+import win32serviceutil
+
 from i18n import t
-from .paths import SERVICE_NAME, SERVICE_DISPLAY, get_bin_path
+
+from .paths import SERVICE_NAME, get_bin_path
+
 
 def install_service(exe_path=None):
     if exe_path is None:

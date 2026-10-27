@@ -4,21 +4,40 @@
 # секции :: SERVICE / :: SETTINGS / :: UPDATES / :: TOOLS, статусы в квадратных скобках.
 # Тёмная тема ZuiV2, вывод с цветами PrintGreen/PrintYellow/PrintRed.
 # PySide6 6.12.0 (abi3, Python 3.15+) — только Essentials.
-import sys, os, html, datetime
+import datetime
+import html
+import os
+import sys
+
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-import service_manager
 import i18n
+import service_manager
 import zapret_core.applog as applog
 from i18n import t
 
 try:
-    from PySide6.QtCore import Qt, QObject, QRunnable, QThreadPool, Signal, Slot, QTimer
-    from PySide6.QtGui import QFont, QAction, QIcon, QPixmap, QPainter, QColor
+    from PySide6.QtCore import QObject, QRunnable, Qt, QThreadPool, QTimer, Signal, Slot
+    from PySide6.QtGui import QAction, QColor, QIcon, QPainter, QPixmap
     from PySide6.QtWidgets import (
-        QApplication, QMainWindow, QWidget, QVBoxLayout, QHBoxLayout, QGridLayout,
-        QFrame, QLabel, QPushButton, QComboBox, QTextEdit, QSpinBox, QMenu,
-        QDialog, QFormLayout, QDialogButtonBox, QMessageBox, QFileDialog,
+        QApplication,
+        QComboBox,
+        QDialog,
+        QDialogButtonBox,
+        QFileDialog,
+        QFormLayout,
+        QFrame,
+        QGridLayout,
+        QHBoxLayout,
+        QLabel,
+        QMainWindow,
+        QMenu,
+        QMessageBox,
+        QPushButton,
+        QSpinBox,
         QSystemTrayIcon,
+        QTextEdit,
+        QVBoxLayout,
+        QWidget,
     )
 except ImportError:
     print("ERROR: PySide6 не установлен. Выполни: pip install PySide6-Essentials")
@@ -299,7 +318,7 @@ class MainWindow(QMainWindow):
         c.addWidget(QLabel(t("ui.sec_settings"), objectName="section"))
         g = QGridLayout()
         g.setSpacing(6)
-        gf_btn = self._menu_btn(g, 0, 0, t("ui.game_filter"), self._game_filter_menu)
+        self._menu_btn(g, 0, 0, t("ui.game_filter"), self._game_filter_menu)
         self._status_cell(g, 0, 1, "lbl_gf")
         self._menu_btn(g, 1, 0, t("ui.ipset_filter"), lambda: self.run_action("toggle_ipset"))
         self._status_cell(g, 1, 1, "lbl_ipset")
@@ -326,7 +345,7 @@ class MainWindow(QMainWindow):
         g = QGridLayout()
         g.setSpacing(6)
         self._menu_btn(g, 0, 0, t("ui.run_diagnostics"), self.run_diagnostics)
-        tests_btn = self._menu_btn(g, 0, 1, t("ui.run_tests"), self.run_tests)
+        self._menu_btn(g, 0, 1, t("ui.run_tests"), self.run_tests)
         self._menu_btn(g, 1, 0, t("ui.remove_conflicts"), lambda: self.run_action("remove_conflicts"))
         self._menu_btn(g, 1, 1, t("ui.clear_discord"), lambda: self.run_action("clear_discord"))
         self._menu_btn(g, 2, 0, t("ui.restore_payload"), lambda: self.run_action("restore_payloads"))
@@ -722,8 +741,8 @@ class MainWindow(QMainWindow):
                 num += 1
                 lines.append(f"  {num}. {f['name']}  {f['sha256']}")
         self.add_out(t("ui.fakes_list"), "info")
-        for l in lines:
-            self.add_out(l, "info")
+        for ln in lines:
+            self.add_out(ln, "info")
         dlg = FakeDialog(self)
         if dlg.exec() != QDialog.Accepted:
             return

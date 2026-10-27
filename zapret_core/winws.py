@@ -1,6 +1,9 @@
 # winws.py — winws.exe: процессы, fake-payload файлы (*.bin), их восстановление
-import os, subprocess
+import os
+import subprocess
+
 from i18n import t
+
 from .paths import BIN_DIR
 
 # === winws.exe управление (заменяет service.bat вызовы) ===
@@ -18,7 +21,8 @@ def winws_is_running():
 def replace_fakes(fake_type=None, number=None):
     """Замена ACTIVE_*.bin на выбранный fake из bin/ (как :replace_active_fakes в service.bat).
     fake_type: 1=Discord UDP, 2=GameFilter UDP; number — позиция в списке fakes (с 1)."""
-    import shutil, hashlib
+    import hashlib
+    import shutil
     if fake_type is None or number is None:
         return {"ok": False, "stdout": "",
                 "stderr": t("sm.fake_need_choice")}
@@ -79,8 +83,10 @@ def find_payload_source():
             subs = [os.path.join(app_root, s) for s in os.listdir(app_root)]
             # ближайшую к настоящему версию — первой (1102, 1103, ...)
             def _mtime(p):
-                try: return os.path.getmtime(p)
-                except OSError: return 0
+                try:
+                    return os.path.getmtime(p)
+                except OSError:
+                    return 0
             for sub in sorted(subs, key=_mtime, reverse=True):
                 b = os.path.join(sub, "bin")
                 try:

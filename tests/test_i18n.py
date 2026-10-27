@@ -1,5 +1,10 @@
 # tests/test_i18n.py — словарь локализации: полнота ru/en, подстановки, хранение выбора
-import unittest, sys, os, json, tempfile, shutil
+import json
+import os
+import shutil
+import sys
+import tempfile
+import unittest
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 import i18n
@@ -17,7 +22,8 @@ class TestI18nDictionary(unittest.TestCase):
     def test_placeholders_match_between_languages(self):
         # {placeholders} должны совпадать, иначе format() упадёт на одном из языков
         import re
-        ph = lambda s: set(re.findall(r"\{(\w+)\}", s))
+        def ph(s):
+            return set(re.findall(r"\{(\w+)\}", s))
         for key, entry in i18n.STRINGS.items():
             self.assertEqual(ph(entry["ru"]), ph(entry["en"]),
                              f"{key}: плейсхолдеры ru/en различаются")

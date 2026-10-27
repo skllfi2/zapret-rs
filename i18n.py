@@ -1,7 +1,8 @@
 # i18n.py — единая локализация zapret-simple (ru/en) для ядра и десктоп-UI.
 # По умолчанию ru, выбор сохраняется в %LOCALAPPDATA%\zapret-simple\ui_settings.json.
 # Использование: from i18n import t; t("sm.no_admin") — с подстановкой {placeholders}.
-import os, json
+import json
+import os
 
 LANG = "ru"
 

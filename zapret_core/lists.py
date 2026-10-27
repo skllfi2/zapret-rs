@@ -1,7 +1,10 @@
 # lists.py — списки lists/*.txt: ipset (тумблер loaded/none/any), user-списки, hosts
 import os
+
 from i18n import t
+
 from .paths import LISTS_DIR
+
 
 def ipset_update():
     """Скачивание ipset-all.txt с GitHub (как :ipset_update в service.bat), с бэкапом."""
@@ -71,10 +74,10 @@ def ipset_status():
             data = f.read()
     except OSError:
         return "none"  # файла нет — как в оригинале при нечитаемом файле
-    lines = [l for l in data.splitlines() if l.strip()]
+    lines = [ln for ln in data.splitlines() if ln.strip()]
     if not lines:
         return "any"
-    return "none" if any("203.0.113.113/32" in l for l in lines) else "loaded"
+    return "none" if any("203.0.113.113/32" in ln for ln in lines) else "loaded"
 
 def toggle_ipset(mode=None):
     """Переключение ipset (как :ipset_switch): loaded→none→any→loaded с backup-файлом."""

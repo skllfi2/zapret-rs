@@ -4,8 +4,8 @@
 # Всё здесь обязано работать даже при сломанном состоянии — поэтому без исключений.
 import os
 import sys
-import traceback
 import threading
+import traceback
 from datetime import datetime
 
 LOG_DIR = os.path.join(os.environ.get("LOCALAPPDATA", ""), "zapret-simple")
@@ -36,6 +36,7 @@ def _show_dialog(exc_type, exc, tb_text):
     """Диалог с путём к логу — только если Qt уже жив и мы в главном потоке."""
     try:
         from PySide6.QtWidgets import QApplication, QMessageBox
+
         from i18n import t
         app = QApplication.instance()
         if app is None or threading.current_thread() is not threading.main_thread():
