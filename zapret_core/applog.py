@@ -42,7 +42,7 @@ def _show_dialog(exc_type: type, exc: BaseException, tb_text: str) -> None:
         if app is None or threading.current_thread() is not threading.main_thread():
             return
         box = QMessageBox()
-        box.setIcon(QMessageBox.Critical)
+        box.setIcon(QMessageBox.Icon.Critical)
         box.setWindowTitle(t("ui.crash_title"))
         box.setText(f"{_short_error(exc_type, exc)}\n\n"
                     f"{t('ui.crash_msg', p=LOG_FILE)}")

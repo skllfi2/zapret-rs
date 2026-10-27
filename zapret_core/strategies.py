@@ -24,7 +24,7 @@ def list_strategies() -> list[str]:
     except OSError:
         return []
 
-def _game_filter_ranges() -> tuple[str | None, str | None]:
+def _game_filter_ranges() -> tuple[str, str]:
     """Эффективные диапазоны как в :game_switch_status: для выключенного направления — 12
     (заглушка: winws получает порт, на котором трафика нет)."""
     gf = game_filter_status()
@@ -84,7 +84,7 @@ def apply_strategy(strategy_id: str, restart: bool = True) -> dict:
     """Применяет стратегию к службе zapret: пересоздаёт binPath (exeName+exeArgs)
     и перезапускает службу. Требует прав администратора."""
     args, err = parse_strategy_args(strategy_id)
-    if err:
+    if err is not None or args is None:
         return {"ok": False, "service": err, "strategy": strategy_id}
     if not is_admin():
         return {"ok": False, "strategy": strategy_id,

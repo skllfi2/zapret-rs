@@ -3,6 +3,7 @@
 # Использование: from i18n import t; t("sm.no_admin") — с подстановкой {placeholders}.
 import json
 import os
+from typing import Any
 
 LANG = "ru"
 
@@ -11,7 +12,7 @@ _SETTINGS_DIR = os.path.join(os.environ.get("LOCALAPPDATA", os.path.expanduser("
 _SETTINGS = os.path.join(_SETTINGS_DIR, "ui_settings.json")
 
 
-def _load():
+def _load() -> None:
     global LANG
     try:
         with open(_SETTINGS, encoding="utf-8") as f:
@@ -22,7 +23,7 @@ def _load():
         pass
 
 
-def save(lang):
+def save(lang: str) -> None:
     """Сохранить выбранный язык (и сделать текущим)."""
     global LANG
     if lang not in ("ru", "en"):
@@ -36,14 +37,14 @@ def save(lang):
         pass
 
 
-def set_lang(lang):
+def set_lang(lang: str) -> None:
     """Сменить язык без записи настроек (для тестов)."""
     global LANG
     if lang in ("ru", "en"):
         LANG = lang
 
 
-def t(key, **kw):
+def t(key: str, **kw: Any) -> str:
     """Перевод по ключу с подстановкой {placeholders}; fallback -> en -> ключ."""
     entry = STRINGS.get(key)
     if entry is None:

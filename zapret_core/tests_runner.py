@@ -69,19 +69,22 @@ def run_tests(on_line: Callable | None = None, test_type: int = 1, mode: int = 1
             creationflags=0x08000000)
     except Exception as e:
         return {"ok": False, "service": t("tests.ps_fail", e=e)}
+    # stdin/stdout=PIPE — каналы гарантированно созданы (локальные для mypy).
+    stdin, stdout = p.stdin, p.stdout
+    assert stdin is not None and stdout is not None
     # Ответы на Read-Host скрипта: тип теста, режим; при Selected — ещё и номер конфига.
     # Пишем сразу — буфер stdin сохранится до чтения скриптом.
     answers = f"{test_type}\n{mode}\n"
     if mode == 2:
         answers += f"{selection or 1}\n"
     try:
-        p.stdin.write(answers)
-        p.stdin.flush()
+        stdin.write(answers)
+        stdin.flush()
     except (BrokenPipeError, OSError):
         pass
     deadline = started + timeout
     try:
-        for raw in p.stdout:
+        for raw in stdout:
             if time.time() > deadline:
                 p.kill()
                 lines.append(t("tests.timeout"))
@@ -95,7 +98,7 @@ def run_tests(on_line: Callable | None = None, test_type: int = 1, mode: int = 1
                     pass
     finally:
         try:
-            p.stdin.close()
+            stdin.close()
         except Exception:
             pass
         try:
