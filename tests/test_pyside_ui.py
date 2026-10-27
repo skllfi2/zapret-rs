@@ -66,7 +66,7 @@ class TestPySideUI(unittest.TestCase):
             self.assertIn(s, secs, f"Секция {s} отсутствует")
 
     def test_lang_switcher_present(self):
-        # Переключатель ru/en в шапке (паритет с вебом)
+        # Переключатель ru/en в шапке — общий с ядром, выбор в ui_settings.json
         self.assertTrue(any(b.text() in ("RU", "EN") for b in self.win.findChildren(self.QPushButton)),
                         "Нет кнопки переключения языка")
 

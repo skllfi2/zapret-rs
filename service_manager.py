@@ -26,7 +26,8 @@ SERVICE_NAME = "zapret"
 SERVICE_DISPLAY = "zapret"
 
 def get_bin_path():
-    return os.path.join(os.path.dirname(os.path.abspath(__file__)), "start.bat")
+    # Службу ставит оригинальный service.bat (см. install_service: .bat как binPath запрещён)
+    return os.path.join(ORIG_DIR, "service.bat")
 
 def install_service(exe_path=None):
     if exe_path is None:
@@ -293,7 +294,7 @@ def check_updates():
 
 
 def clear_discord():
-    """Остановка Discord + удаление кэша (перенесено из main.py — доступно и Tkinter)."""
+    """Остановка Discord + удаление кэша (доступно из любого UI)."""
     import shutil
     killed = []
     for p in ["Discord.exe", "DiscordCanary.exe", "DiscordPTB.exe"]:
@@ -624,7 +625,7 @@ def toggle_ipset(mode=None):
         return {"ok": False, "service": str(e)}
 
 def current_strategy():
-    """Последняя применённая стратегия (файл .strategy рядом с main.py)."""
+    """Последняя применённая стратегия (файл .strategy рядом с приложением)."""
     p = os.path.join(os.path.dirname(os.path.abspath(__file__)), ".strategy")
     try:
         with open(p, encoding="utf-8") as f:

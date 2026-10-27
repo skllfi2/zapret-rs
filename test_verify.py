@@ -1,4 +1,4 @@
-# Проверка zapret-simple без запуска окна (максимально просто)
+# test_verify.py — офлайн-проверки zapret-simple без запуска окна (структура «только PySide6»)
 import os, sys
 
 ORIG = r"C:\Users\dexox\Pictures\zapret-discord-youtube"
@@ -10,43 +10,54 @@ def check(p, msg):
     if not p: errors.append(msg)
     else: print("  OK:", msg)
 
-print("=== Структура zapret-simple ===")
-for f in ["main.py", "index.html", "start.bat", "update.bat"]:
-    check(os.path.isfile(os.path.join(SIMPLE, f)), f"{f} есть")
+print("=== Состав zapret-simple ===")
+for f in ["zapret_pyside.py", "service_manager.py", "i18n.py", "update.bat", "start-gui.bat"]:
+    check(os.path.isfile(os.path.join(SIMPLE, f)), f"{f} существует")
+# Веб/tkinter-варианты удалены — единственный UI: PySide6
+for f in ["main.py", "index.html", "zapret-tkinter.py", "start.bat"]:
+    check(not os.path.isfile(os.path.join(SIMPLE, f)), f"{f} удалён (оставлен только PySide6)")
 
-print("\n=== Оригинал доступен ===")
-check(os.path.isfile(os.path.join(ORIG, "service.bat")), "service.bat в оригинале")
-check(os.path.isfile(os.path.join(ORIG, "general.bat")), "general.bat в оригинале")
+print("\n=== Оригинальная копия zapret ===")
+check(os.path.isfile(os.path.join(ORIG, "service.bat")), "service.bat есть в оригинальной копии")
+check(os.path.isfile(os.path.join(ORIG, "general.bat")), "general.bat есть в оригинальной копии")
 
 print("\n=== Python 3.15+ ===")
 import subprocess
 res = subprocess.run([r"C:\Users\dexox\AppData\Local\Python\pythoncore-3.15-64\python.exe", "--version"], capture_output=True, text=True)
-check(res.stdout.strip().startswith("Python 3.15"), f"Python 3.15.x (получено: {res.stdout.strip()})")
+check(res.stdout.strip().startswith("Python 3.15"), f"Python 3.15.x (фактически: {res.stdout.strip()})")
 
-print("\n=== Синтаксис main.py ===")
-try:
-    compile(open(os.path.join(SIMPLE,"main.py")).read(), "main.py", "exec")
-    check(True, "main.py синтаксически верен")
-except Exception as e:
-    check(False, f"main.py ошибка: {e}")
+print("\n=== Синтаксис исходников ===")
+for f in ["zapret_pyside.py", "service_manager.py", "i18n.py"]:
+    try:
+        compile(open(os.path.join(SIMPLE, f), encoding="utf-8").read(), f, "exec")
+        check(True, f"{f} синтаксически верен")
+    except Exception as e:
+        check(False, f"{f} ошибка: {e}")
 
-print("\n=== Конечные точки (endpoints) ===")
-content = open(os.path.join(SIMPLE,"main.py"), encoding="utf-8").read()
-for ep in ["/api/update", "/api/status", "/api/start", "/api/stop", "/api/diag", "/api/lists"]:
-    check(f'"{ep}"' in content, f"endpoint {ep}")
+print("\n=== Действия меню вызываются в UI ===")
+src = open(os.path.join(SIMPLE, "zapret_pyside.py"), encoding="utf-8").read()
+for a in ["service_status", "service_install", "service_remove", "toggle_ipset",
+          "toggle_check_updates", "check_updates", "set_game_filter", "menu_status",
+          "clear_discord", "restore_payloads", "ipset_update", "update_hosts",
+          "remove_conflicts", "relaunch_admin", "tests_prereq"]:
+    check(f'"{a}"' in src, f"действие {a}")
 
-print("\n=== Мутирующие эндпоинты защищены CSRF ===")
-check('X-Zapret-Token' in content, "проверка X-Zapret-Token")
-check('methods=["POST"]' in content, "мутирующие — только POST")
+print("\n=== Фоновая работа без блокировки UI ===")
+check("QThreadPool" in src, "QThreadPool для фоновых операций")
+check("Signal(" in src, "результаты через сигналы Qt")
+check("root.after(0" not in src, "нет остатков tkinter-подхода")
 
-print("\n=== HTML ссылается на /api/update ===")
-html = open(os.path.join(SIMPLE,"index.html"), encoding="utf-8").read()
-check("post('api/update')" in html, "post('api/update') в HTML")
-check("api/update" in html, "api/update в HTML")
+print("\n=== Локализация i18n ===")
+i18n_src = open(os.path.join(SIMPLE, "i18n.py"), encoding="utf-8").read()
+check("STRINGS" in i18n_src, "словарь STRINGS объявлен")
+check('from i18n import t' in src, "UI подключён к словарю")
+check("i18n.save" in src, "переключатель языка сохраняет выбор")
 
-print("\n=== start.bat указывает на Python 3.15 ===")
-bat = open(os.path.join(SIMPLE, "start.bat")).read()
-check("pythoncore-3.15-64" in bat, "start.bat ссылается на pythoncore-3.15-64")
+print("\n=== Безопасность ===")
+check(os.path.isfile(os.path.join(SIMPLE, "requirements.txt")), "requirements.txt есть")
+req = open(os.path.join(SIMPLE, "requirements.txt"), encoding="utf-8").read()
+check("PySide6-Essentials" in req, "PySide6-Essentials в зависимостях")
+check("flask" not in req.lower().replace("#", ""), "flask удалён (веб-вариант не нужен)")
 
 print("\n=== Итог ===")
 if errors:

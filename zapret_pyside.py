@@ -186,7 +186,7 @@ class MainWindow(QMainWindow):
         # Живой вывод тестов: сигнал рабочего потока -> слот главного потока
         self.line_signal.connect(self._on_line_signal)
 
-        # Таймер статуса службы (один, как в tkinter-версии)
+        # Таймер статуса службы: один на окно, опрос в фоне через QThreadPool
         self.timer = QTimer(self)
         self.timer.timeout.connect(self.refresh)
         self.timer.start(3000)
@@ -228,7 +228,7 @@ class MainWindow(QMainWindow):
         apply_btn.clicked.connect(self.apply_strategy)
         srow.addWidget(apply_btn)
         srow.addStretch()
-        # Переключатель языка ru/en (как в вебе — выбор сохраняется)
+        # Переключатель языка ru/en — выбор сохраняется и переживает перезапуск
         self.lang_btn = QPushButton(i18n.LANG.upper(), objectName="small")
         self.lang_btn.setFixedSize(46, 26)
         self.lang_btn.setToolTip(t("ui.lang"))
@@ -354,7 +354,7 @@ class MainWindow(QMainWindow):
         return btn
 
     def _switch_lang(self):
-        """Переключатель ru/en: сохраняет выбор и перестраивает окно (как в вебе)."""
+        """Переключатель ru/en: сохраняет выбор и перестраивает окно на месте."""
         i18n.save("en" if i18n.LANG == "ru" else "ru")
         old = self.takeCentralWidget()
         if old is not None:

@@ -1,6 +1,5 @@
 # i18n.py — единая локализация zapret-simple (ru/en) для ядра и десктоп-UI.
-# Веб имеет собственный i18n в index.html (localStorage); общий язык держим таким же:
-# по умолчанию ru, выбор сохраняется в %LOCALAPPDATA%\zapret-simple\ui_settings.json.
+# По умолчанию ru, выбор сохраняется в %LOCALAPPDATA%\zapret-simple\ui_settings.json.
 # Использование: from i18n import t; t("sm.no_admin") — с подстановкой {placeholders}.
 import os, json
 
@@ -320,9 +319,6 @@ STRINGS = {
     "ui.footer": {
         "ru": "zapret-simple — нативный SCM (pywin32) | без service.bat | PySide6 6.12 | Python 3.15+",
         "en": "zapret-simple — native SCM (pywin32) | no service.bat | PySide6 6.12 | Python 3.15+"},
-    "ui.footer_tk": {
-        "ru": "zapret-simple — нативный SCM (pywin32) | без service.bat | Python 3.15+",
-        "en": "zapret-simple — native SCM (pywin32) | no service.bat | Python 3.15+"},
     "ui.ready_msg": {
         "ru": "Готово. Меню как в оригинальном service.bat — все действия работают через service_manager.",
         "en": "Ready. Menu matches the original service.bat — all actions go through service_manager."},
@@ -331,7 +327,6 @@ STRINGS = {
     "ui.sec_settings": {"ru": ":: НАСТРОЙКИ", "en": ":: SETTINGS"},
     "ui.sec_updates": {"ru": ":: ОБНОВЛЕНИЯ", "en": ":: UPDATES"},
     "ui.sec_tools": {"ru": ":: ИНСТРУМЕНТЫ", "en": ":: TOOLS"},
-    "ui.sec_control_tk": {"ru": "УПРАВЛЕНИЕ СЕРВИСОМ (SCM — без .bat)", "en": "SERVICE CONTROL (SCM — no .bat)"},
     # пункты меню
     "ui.install_service": {"ru": "1.  Установить службу", "en": "1.  Install Service"},
     "ui.remove_services": {"ru": "2.  Удалить службы", "en": "2.  Remove Services"},
@@ -376,8 +371,6 @@ STRINGS = {
               "Идут несколько минут.",
         "en": "Tests require administrator rights and the zapret service REMOVED (as in the "
               "original). Takes several minutes."},
-    "ui.ok": {"ru": "ОК", "en": "OK"},
-    "ui.cancel": {"ru": "Отмена", "en": "Cancel"},
     # сообщения вывода PySide
     "ui.err_no_strategy": {"ru": "[X] Стратегия не выбрана", "en": "[X] No strategy selected"},
     "ui.apply_need_admin": {
@@ -393,49 +386,5 @@ STRINGS = {
         "en": ">>> Running tests: type {t}, mode {m} (takes several minutes)..."},
     "ui.no_bins": {"ru": "[X] Нет .bin файлов в bin/", "en": "[X] No .bin files in bin/"},
     "ui.fakes_list": {"ru": "Fake-файлы:", "en": "Fake files:"},
-    "ui.payload_warn_tk": {"ru": "⚠ нет .bin: {n} — клик для восстановления", "en": "⚠ missing .bin: {n} — click to restore"},
     "ui.payload_warn": {"ru": "⚠ нет .bin: {n} — восстановить", "en": "⚠ missing .bin: {n} — restore"},
-    "ui.tk_root_title": {"ru": "Zapret — обход DPI", "en": "Zapret — DPI Bypass"},
-    "ui.tk_format_err": {"ru": "[X] Формат: <тип> <номер>, например 1 3", "en": "[X] Format: <type> <number>, e.g. 1 3"},
-    "ui.tk_strategy_err": {"ru": "[X] Стратегия не выбрана", "en": "[X] No strategy selected"},
-    "ui.tk_need_admin": {
-        "ru": "[X] Применение стратегии требует прав администратора — "
-              "запусти от администратора (кнопка «Админ»)",
-        "en": "[X] Applying a strategy requires administrator rights — "
-              "run as administrator (the \"Admin\" button)"},
-    "ui.tk_applying": {
-        "ru": ">>> Применение стратегии: {s} (служба будет перезапущена)...",
-        "en": ">>> Applying strategy: {s} (the service will be restarted)..."},
-    "ui.tk_running": {"ru": ">>> Выполняется: {a}", "en": ">>> Running: {a}"},
-    "ui.tk_admin_btn": {"ru": "Админ", "en": "Admin"},
-    "ui.tk_ready": {
-        "ru": "Готово. Нажми любую кнопку.\nВсе функции работают через service_manager (без .bat).",
-        "en": "Ready. Press any button.\nAll functions go through service_manager (no .bat)."},
-    "ui.tk_error": {"ru": "[ОШИБКА]", "en": "[ERROR]"},
-    "ui.tk_fake_prompt": {
-        "ru": "Введите: тип (1=Discord UDP, 2=GameFilter UDP) и номер fake-файла\n"
-              "Например: 1 3",
-        "en": "Enter: type (1=Discord UDP, 2=GameFilter UDP) and fake file number\n"
-              "Example: 1 3"},
-    # короткие кнопки tkinter-сетки
-    "ui.tk_status": {"ru": "Статус", "en": "Status"},
-    "ui.tk_install": {"ru": "Установить", "en": "Install Svc"},
-    "ui.tk_uninstall": {"ru": "Удалить", "en": "Uninstall"},
-    "ui.tk_start": {"ru": "Старт", "en": "Start"},
-    "ui.tk_stop": {"ru": "Стоп", "en": "Stop"},
-    "ui.tk_diag": {"ru": "Диагностика", "en": "Diag"},
-    "ui.tk_test": {"ru": "Тесты", "en": "Test"},
-    "ui.tk_update": {"ru": "Обновить", "en": "Update"},
-    "ui.tk_gamefilter": {"ru": "Игровой фильтр", "en": "GameFilter"},
-    "ui.tk_discord": {"ru": "Очистить Discord", "en": "Clear Discord"},
-    "ui.tk_fakes": {"ru": "Список fakes", "en": "List Fakes"},
-    "ui.tk_restore": {"ru": "Восстановить payload", "en": "Restore Payload"},
-    "ui.tk_ipset": {"ru": "Обновить IPSet", "en": "IPSet Update"},
-    # ---------- web API (main.py) ----------
-    "sm.use_post": {
-        "ru": "Используй POST (CSRF protection)",
-        "en": "Use POST (CSRF protection)"},
-    "ui.tests_bg_started": {
-        "ru": "Тесты запущены в фоне — полли /api/tests_state",
-        "en": "Tests started in background — poll /api/tests_state"},
 }
