@@ -183,7 +183,7 @@ class TestServiceManager(unittest.TestCase):
         # несуществующая стратегия — честная ошибка
         args2, err2 = s.parse_strategy_args("no-such-strategy")
         self.assertIsNone(args2)
-        self.assertIn("не найден", err2)
+        self.assertIn("no-such-strategy", err2)  # путь в сообщении (ru/en из i18n)
 
     def test_parse_strategy_reassembles_caret_lines(self):
         # .bat пишет аргументы длинными строками с продолжением через ^
@@ -257,7 +257,8 @@ class TestServiceManager(unittest.TestCase):
                 r.stderr = ""
                 return r
             sr.side_effect = _side
-            with mock.patch("service_manager.winws_is_running", return_value=True):
+            with mock.patch("service_manager.winws_is_running", return_value=True), \
+                 mock.patch("service_manager.is_admin", return_value=False):
                 d = run_diagnostics()
         self.assertGreaterEqual(len(d["checks"]), 17)
         names = {c["name"] for c in d["checks"]}
@@ -270,12 +271,33 @@ class TestServiceManager(unittest.TestCase):
         self.assertIn("counts", d)
         self.assertEqual(sum(d["counts"].values()), len(d["checks"]))
 
+    def test_diagnostics_autofixes_timestamps_like_original(self):
+        # Как в оригинале: выключенные timestamps диагностика включает сама при правах
+        from service_manager import run_diagnostics
+        with mock.patch("service_manager.subprocess.run") as sr:
+            def _side(cmd, **kw):
+                r = mock.Mock()
+                r.returncode = 0
+                r.stdout = "        STATE              : 4  RUNNING\n" if cmd[:3] == ["sc", "query", "BFE"] else ""
+                r.stderr = ""
+                return r
+            sr.side_effect = _side
+            with mock.patch("service_manager.winws_is_running", return_value=True), \
+                 mock.patch("service_manager.is_admin", return_value=True), \
+                 mock.patch("service_manager.tcp_timestamps", return_value=(True, "enabled")):
+                d = run_diagnostics()
+        ts = next(c for c in d["checks"] if c["name"] == "TCP timestamps")
+        self.assertEqual(ts["level"], "ok")
+        import i18n
+        self.assertEqual(ts["msg"], i18n.t("diag.ts_enabled"))
+
     def test_tests_prerequisites_reports_problems(self):
         # Пре-чеки тестов честно перечисляют проблемы (права/curl/служба)
         from service_manager import tests_prerequisites
         with mock.patch("service_manager.is_admin", return_value=False):
             probs = tests_prerequisites()
-        self.assertTrue(any("Administrator" in p for p in probs))
+        import i18n
+        self.assertIn(i18n.t("tests.need_admin"), probs)
 
     def test_run_tests_refuses_without_prereq(self):
         # Без прав тесты не запускаются вообще — возвращается список проблем

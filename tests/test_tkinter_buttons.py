@@ -6,9 +6,13 @@ class TestTkinterButtons(unittest.TestCase):
     def test_all_buttons_present(self):
         with open(os.path.join(os.path.dirname(os.path.dirname(__file__)), "zapret-tkinter.py"), "r", encoding="utf-8") as f:
             content = f.read()
-        actions = ["Status","Install","Uninstall","Start","Stop","Diag","Test","Update","Discord"]
+        # Действия, а не конкретный язык подписей (локализация через i18n)
+        actions = ["service_status", "service_install", "service_remove",
+                   "run_action(\"start\")", "run_action(\"stop\")",
+                   "service_diagnostics", "run_action(\"test\")",
+                   "check_updates", "clear_discord"]
         for a in actions:
-            self.assertIn(a, content, f"Button {a} missing")
+            self.assertIn(a, content, f"Button/action {a} missing")
 
     def test_strategy_selector_present(self):
         # Стратегии выбираются и в Tkinter, и в вебе (общий service_manager)

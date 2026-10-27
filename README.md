@@ -10,6 +10,7 @@
 | `service_manager.py` | Вся логика: SCM-служба `zapret` (pywin32), winws.exe, списки, fakes, обновления. Полная замена `service.bat`. |
 | `main.py` | Flask-сервер на `http://127.0.0.1:8765/` (REST API + `index.html`). |
 | `index.html` | Веб-интерфейс: 4 вкладки, темы, i18n (ru/en), поллинг статуса. |
+| `i18n.py` | Единый словарь локализации ru/en для ядра и обоих десктоп-UI + хранение выбора. |
 | `zapret_pyside.py` | **Основной десктоп-UI на PySide6 6.12 (Qt 6).** Структура меню как в оригинальном `service.bat` (секции `:: SERVICE/SETTINGS/UPDATES/TOOLS`, пункты 1–12, статусы в `[]`), тёмная тема, фоновые потоки `QThreadPool`, живой вывод тестов через сигнал. |
 | `zapret-tkinter.py` | Запасной десктоп-UI на чистом tkinter — работает, если PySide6 не установлен. |
 
@@ -28,8 +29,23 @@ python zapret-tkinter.py  # десктопный UI на tkinter (запасно
 Зависимости: `pip install -r requirements.txt` (flask, pywin32, PySide6-Essentials).
 PySide6 ставится только `Essentials` (~215 МБ) — метапакет с `Addons` (~100 МБ) в проекте
 не нужен. Некоторые действия (`sc`, `netsh`, управление службой) требуют запуска
-**от администратора** — статус прав отображается в интерфейсе, кнопка «Admin (права)»
+**от администратора** — статус прав отображается в интерфейсе, кнопка «Права админа»
 перезапускает приложение с повышением (UAC).
+
+## Локализация (ru/en)
+
+Один переключатель языка на все интерфейсы, выбор общий:
+
+- **Словарь** — `i18n.py` (`STRINGS`: ключ → `{ru, en}`), вызовы `t("key", **переменные)`.
+  Дефолт `ru`; `en` — дословно как в оригинальном `service.bat` / `test zapret.ps1`
+  (маркеры `[+]`/`[?]`/`[X]` и тексты диагностик совпадают с оригиналом 1-в-1).
+- **Хранение** — `%LOCALAPPDATA%\zapret-simple\ui_settings.json` (`{"lang": "ru"}`),
+  читается при старте (`i18n._load()`).
+- **Десктоп** — кнопка `RU`/`EN` в шапке PySide6-окна (перестраивает окно на месте)
+  и в шапке tkinter-окна (пересоздаёт окно). Пункты меню, диалоги, вывод — через `t()`.
+- **Веб** — выбор в `localStorage['zapret-lang']` (как раньше); запросы теперь несут
+  заголовок `X-Zapret-Lang`, и API-ответы (`msg`, диагностикa, пре-чеки тестов)
+  приходят на языке вкладки.
 
 ## Меню, диагностикa и тесты
 
@@ -44,8 +60,9 @@ Update Hosts / Check for Updates), `:: TOOLS` (Run Diagnostics / Run Tests).
 - **Run Diagnostics** — полный порт `:service_diagnostics` на Python (17 проверок: BFE,
   прокси, TCP timestamps, Adguard, Killer, Intel Connectivity, Check Point, SmartByte,
   кириллица в пути, OneDrive, WinDivert, VPN, DoH, hosts, конфликты). Цвета
-  `[+]`/`[?]`/`[X]` — как PrintGreen/PrintYellow/PrintRed. Только чтение; авто-фиксы
-  (TCP timestamps + удаление конфликтных служб) — отдельная кнопка «Remove conflicts».
+  `[+]`/`[?]`/`[X]` — как PrintGreen/PrintYellow/PrintRed. Как в оригинале, выключенные
+  TCP timestamps диагностика включает сама (при правах админа); разрушающие фиксы
+  (удаление WinDivert и конфликтных служб) — отдельная кнопка «Remove conflicts».
 - **Run Tests** — пре-чеки (права админа, curl, служба zapret удалена), затем запуск
   оригинального `utils\test zapret.ps1` с ответами на его `Read-Host` через stdin;
   строки вывода идут в UI живьём, итог и «Best strategy» берутся из
@@ -72,7 +89,7 @@ Update Hosts / Check for Updates), `:: TOOLS` (Run Diagnostics / Run Tests).
 ## Тесты
 
 ```bat
-python -m unittest discover -s tests -v
+python -m unittest discover -s tests -v   # 80 тестов, включая полноту словаря i18n
 python test_verify.py
 ```
 

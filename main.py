@@ -7,6 +7,8 @@
 from flask import Flask, jsonify, request, abort
 import hmac, os
 import service_manager
+import i18n
+from i18n import t
 from service_manager import run_service_action  # полная замена service.bat
 
 app = Flask(__name__)
@@ -21,11 +23,15 @@ def _guard_host():
     # Защита от DNS rebinding: чужой Host не должен ходить по API, иначе токен читается
     if request.host not in ALLOWED_HOSTS:
         abort(403, description="Host not allowed")
+    # Язык ответов API — как вкладка localStorage zapret-lang из index.html
+    lang = request.headers.get("X-Zapret-Lang", "")
+    if lang in ("ru", "en"):
+        i18n.set_lang(lang)
 
 def _check_csrf():
     """Мутирующие запросы: только POST + валидный токен."""
     if request.method != "POST":
-        return jsonify({"ok": False, "msg": "Используй POST (CSRF protection)"}), 405
+        return jsonify({"ok": False, "msg": t("sm.use_post")}), 405
     if not hmac.compare_digest(request.headers.get("X-Zapret-Token", ""), CSRF_TOKEN):
         return jsonify({"ok": False, "msg": "Bad or missing X-Zapret-Token"}), 403
     return None
@@ -75,7 +81,7 @@ _TESTS = {"running": False, "lines": [], "result": None}
 def run_tests_endpoint():
     if _check_csrf(): return _check_csrf()
     if _TESTS["running"]:
-        return jsonify({"ok": False, "msg": "Тесты уже выполняются", "running": True})
+        return jsonify({"ok": False, "msg": t("ui.games_running"), "running": True})
     _TESTS.update(running=True, lines=[], result=None)
 
     def _worker():
@@ -92,7 +98,7 @@ def run_tests_endpoint():
     import threading
     threading.Thread(target=_worker, daemon=True).start()
     return jsonify({"ok": True, "running": True,
-                    "msg": "Тесты запущены в фоне — полли /api/tests_state"})
+                    "msg": t("ui.tests_bg_started")})
 
 @app.route("/api/tests_state")
 def tests_state():

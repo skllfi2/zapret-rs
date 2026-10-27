@@ -133,7 +133,8 @@ class TestMainEndpoints(unittest.TestCase):
             r = self.c.post("/api/set_strategy", data={"id": "general"}, headers=self.h).get_json()
         self.assertFalse(r["ok"])
         self.assertEqual(r["strategy"], "general")
-        self.assertIn("администратор", r["service"])
+        import i18n
+        self.assertEqual(r["service"], i18n.t("sm.apply_no_admin"))
 
     def test_set_strategy_applies_with_admin(self):
         with mock.patch("main.service_manager.is_admin", return_value=True), \

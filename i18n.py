@@ -1,0 +1,441 @@
+# i18n.py — единая локализация zapret-simple (ru/en) для ядра и десктоп-UI.
+# Веб имеет собственный i18n в index.html (localStorage); общий язык держим таким же:
+# по умолчанию ru, выбор сохраняется в %LOCALAPPDATA%\zapret-simple\ui_settings.json.
+# Использование: from i18n import t; t("sm.no_admin") — с подстановкой {placeholders}.
+import os, json
+
+LANG = "ru"
+
+_SETTINGS_DIR = os.path.join(os.environ.get("LOCALAPPDATA", os.path.expanduser("~")),
+                             "zapret-simple")
+_SETTINGS = os.path.join(_SETTINGS_DIR, "ui_settings.json")
+
+
+def _load():
+    global LANG
+    try:
+        with open(_SETTINGS, encoding="utf-8") as f:
+            lang = json.load(f).get("lang")
+        if lang in ("ru", "en"):
+            LANG = lang
+    except (OSError, ValueError):
+        pass
+
+
+def save(lang):
+    """Сохранить выбранный язык (и сделать текущим)."""
+    global LANG
+    if lang not in ("ru", "en"):
+        return
+    LANG = lang
+    try:
+        os.makedirs(_SETTINGS_DIR, exist_ok=True)
+        with open(_SETTINGS, "w", encoding="utf-8") as f:
+            json.dump({"lang": lang}, f)
+    except OSError:
+        pass
+
+
+def set_lang(lang):
+    """Сменить язык без записи настроек (для тестов)."""
+    global LANG
+    if lang in ("ru", "en"):
+        LANG = lang
+
+
+def t(key, **kw):
+    """Перевод по ключу с подстановкой {placeholders}; fallback -> en -> ключ."""
+    entry = STRINGS.get(key)
+    if entry is None:
+        return key
+    s = entry.get(LANG) or entry.get("en") or key
+    if kw:
+        try:
+            return s.format(**kw)
+        except (KeyError, IndexError):
+            return s
+    return s
+
+
+_load()
+
+
+# === Словарь: key -> {"ru": ..., "en": ...} ===
+# ru — текст по умолчанию для русскоязычного пользователя;
+# en — дословно как в оригинальном service.bat / test zapret.ps1 (паритет маркеров).
+STRINGS = {
+    # ---------- service_manager: общие ----------
+    "sm.bat_as_bin": {
+        "ru": ".bat нельзя указывать как binPath службы: {exe}. "
+              "Служба zapret устанавливается оригинальным service.bat и запускает winws.exe.",
+        "en": ".bat cannot be used as service binPath: {exe}. "
+              "The zapret service is installed by the original service.bat and runs winws.exe."},
+    "sm.no_admin": {
+        "ru": "Нет прав администратора — запусти от имени администратора (sc/netsh будут падать)",
+        "en": "Administrator rights missing — run as Administrator (sc/netsh will fail)"},
+    "sm.apply_no_admin": {
+        "ru": "Нет прав администратора — перезапусти приложение от администратора "
+              "(кнопка «Admin») и повтори",
+        "en": "Administrator rights missing — restart the app as Administrator "
+              "(the \"Admin\" button) and retry"},
+
+    # ---------- fakes ----------
+    "sm.fake_need_choice": {
+        "ru": "Нужен выбор: fake_type (1=Discord, 2=GameFilter) и номер fake-файла. "
+              "Сначала вызови list_fakes.",
+        "en": "Choice required: fake_type (1=Discord, 2=GameFilter) and fake file number. "
+              "Call list_fakes first."},
+    "sm.fake_unknown_type": {
+        "ru": "Неизвестный тип fake: {t} (нужен 1 или 2)",
+        "en": "Unknown fake type: {t} (need 1 or 2)"},
+    "sm.fake_number_not_int": {
+        "ru": "Номер должен быть числом, получено: {n}",
+        "en": "Number must be an integer, got: {n}"},
+    "sm.fake_number_range": {
+        "ru": "Номер {i} вне диапазона 1..{n}",
+        "en": "Number {i} out of range 1..{n}"},
+    "sm.fakes_note": {
+        "ru": "ACTIVE_* — текущие; остальные нумеруются с 1 для replace_fakes",
+        "en": "ACTIVE_* are the current ones; the rest are numbered from 1 for replace_fakes"},
+
+    # ---------- game filter / ipset / updates ----------
+    "sm.gf_absent": {
+        "ru": "game_filter.enabled отсутствует — игровой фильтр выключен",
+        "en": "game_filter.enabled is missing — game filter is off"},
+    "sm.ipset_empty": {
+        "ru": "Пустой ответ от сервера — файл не обновлён",
+        "en": "Empty response from server — file not updated"},
+    "sm.ipset_updated": {
+        "ru": "ipset-all.txt обновлён: {b} байт, {n} строк",
+        "en": "ipset-all.txt updated: {b} bytes, {n} lines"},
+    "sm.ipset_update_fail": {
+        "ru": "Не удалось обновить ipset: {e}",
+        "en": "Failed to update ipset: {e}"},
+    "sm.ipset_no_backup": {
+        "ru": "Ошибка: нет бэкапа для восстановления. Сначала обнови список через меню",
+        "en": "Error: no backup to restore. Update the list from the service menu first"},
+    "sm.updates_disabled": {
+        "ru": "Проверка обновлений отключена (нет utils/check_updates.enabled)",
+        "en": "Update check disabled (no utils/check_updates.enabled)"},
+    "sm.ver_unreadable": {
+        "ru": "Не удалось прочитать LOCAL_VERSION из service.bat",
+        "en": "Failed to read LOCAL_VERSION from service.bat"},
+    "sm.ver_local_only": {
+        "ru": "Локальная версия {l}; проверить GitHub не удалось ({e})",
+        "en": "Local version {l}; could not check GitHub ({e})"},
+    "sm.ver_latest": {
+        "ru": "Установлена последняя версия: {l}",
+        "en": "Latest version installed: {l}"},
+    "sm.ver_new": {
+        "ru": "Доступна новая версия: {r} (локальная: {l}). "
+              "https://github.com/Flowseal/zapret-discord-youtube/releases/latest",
+        "en": "New version available: {r} (local: {l}). "
+              "https://github.com/Flowseal/zapret-discord-youtube/releases/latest"},
+
+    # ---------- hosts / payload ----------
+    "sm.hosts_summary": {
+        "ru": "hosts: {n} строк, записей youtube/youtu.be: {y}",
+        "en": "hosts: {n} lines, youtube/youtu.be entries: {y}"},
+    "sm.hosts_note": {
+        "ru": "Записи youtube в hosts могут мешать — при необходимости удали их вручную",
+        "en": "youtube entries in hosts may interfere — remove them manually if needed"},
+    "sm.payload_src_missing": {
+        "ru": "Источник *.bin не найден. Задай ZAPRET_PAYLOADS_DIR или проверь архив версий.",
+        "en": "No *.bin source found. Set ZAPRET_PAYLOADS_DIR or check the versions archive."},
+    "sm.payload_src_eq_dest": {
+        "ru": "Источник и назначение совпадают — нечего копировать.",
+        "en": "Source and destination are the same — nothing to copy."},
+    "sm.payload_copied": {
+        "ru": "Скопировано {c}, пропущено (уже были) {s}. {status}",
+        "en": "Copied {c}, skipped (already present) {s}. {status}"},
+    "sm.bin_dir_missing": {
+        "ru": "Каталог bin не найден: {d}",
+        "en": "bin directory not found: {d}"},
+    "sm.payloads_summary": {
+        "ru": "payload-файлов в bin: {n}; отсутствует обязательных: {m}",
+        "en": "payload files in bin: {n}; required missing: {m}"},
+    "sm.payloads_missing": {
+        "ru": "Отсутствуют: {list}",
+        "en": "Missing: {list}"},
+
+    # ---------- стратегии ----------
+    "sm.strategy_not_found": {
+        "ru": "Файл стратегии не найден: {p}",
+        "en": "Strategy file not found: {p}"},
+    "sm.strategy_no_winws": {
+        "ru": "В {s}.bat не найдена строка запуска winws.exe",
+        "en": "No winws.exe launch line found in {s}.bat"},
+    "sm.service_started_suffix": {
+        "ru": ", служба запущена",
+        "en": ", service started"},
+    "sm.strategy_applied": {
+        "ru": "Стратегия {s} применена ({n} аргументов){started}",
+        "en": "Strategy {s} applied ({n} args){started}"},
+
+    # ---------- меню-тумблеры ----------
+    "sm.bad_game_filter_mode": {
+        "ru": "Недопустимый режим: {m}",
+        "en": "Invalid mode: {m}"},
+
+    # ---------- диагностика (en — дословно оригинал) ----------
+    "diag.bfe_bad": {
+        "ru": "Base Filtering Engine не запущен. Этот сервис нужен для работы zapret",
+        "en": "Base Filtering Engine is not running. This service is required for zapret to work"},
+    "diag.bfe_ok": {"ru": "Проверка BFE пройдена", "en": "Base Filtering Engine check passed"},
+    "diag.proxy_ok": {"ru": "Проверка прокси пройдена", "en": "Proxy check passed"},
+    "diag.proxy_warn": {
+        "ru": "Системный прокси включён: {p}. Убедись, что он рабочий, или отключи его",
+        "en": "System proxy is enabled: {p}. Make sure it's valid or disable it if you don't use a proxy"},
+    "diag.ts_ok": {"ru": "Проверка TCP timestamps пройдена", "en": "TCP timestamps check passed"},
+    "diag.ts_enabling": {
+        "ru": "TCP timestamps выключены. Включаю timestamps...",
+        "en": "[?] TCP timestamps are disabled. Enabling timestamps..."},
+    "diag.ts_enabled": {
+        "ru": "TCP timestamps успешно включены",
+        "en": "TCP timestamps successfully enabled"},
+    "diag.ts_failed": {
+        "ru": "Не удалось включить TCP timestamps: {e}",
+        "en": "Failed to enable TCP timestamps: {e}"},
+    "diag.ts_no_admin": {
+        "ru": "TCP timestamps выключены — запусти от администратора, чтобы включить "
+              "(как в оригинале: netsh set global timestamps=enabled)",
+        "en": "TCP timestamps are disabled — run as Administrator to enable "
+              "(as in the original: netsh set global timestamps=enabled)"},
+    "diag.ts_check_failed": {"ru": "Проверка TCP не удалась: {e}", "en": "TCP check failed: {e}"},
+    "diag.adguard_bad": {
+        "ru": "Найден процесс Adguard. Adguard может мешать Discord",
+        "en": "Adguard process found. Adguard may cause problems with Discord"},
+    "diag.adguard_ok": {"ru": "Проверка Adguard пройдена", "en": "Adguard check passed"},
+    "diag.killer_bad": {
+        "ru": "Найдены службы Killer. Killer конфликтует с zapret",
+        "en": "Killer services found. Killer conflicts with zapret"},
+    "diag.killer_ok": {"ru": "Проверка Killer пройдена", "en": "Killer check passed"},
+    "diag.intel_bad": {
+        "ru": "Найдена Intel Connectivity Network Service. Она конфликтует с zapret",
+        "en": "Intel Connectivity Network Service found. It conflicts with zapret"},
+    "diag.intel_ok": {"ru": "Проверка Intel Connectivity пройдена", "en": "Intel Connectivity check passed"},
+    "diag.checkpoint_bad": {
+        "ru": "Найдены службы Check Point. Check Point конфликтует с zapret. Попробуй удалить Check Point",
+        "en": "Check Point services found. Check Point conflicts with zapret. Try to uninstall Check Point"},
+    "diag.checkpoint_ok": {"ru": "Проверка Check Point пройдена", "en": "Check Point check passed"},
+    "diag.smartbyte_bad": {
+        "ru": "Найдены службы SmartByte. SmartByte конфликтует с zapret. "
+              "Попробуй удалить или отключить SmartByte через services.msc",
+        "en": "SmartByte services found. SmartByte conflicts with zapret. "
+              "Try to uninstall or disable SmartByte through services.msc"},
+    "diag.smartbyte_ok": {"ru": "Проверка SmartByte пройдена", "en": "SmartByte check passed"},
+    "diag.cyrillic_warn": {
+        "ru": "Путь установки zapret содержит кириллицу. Если обход не работает — "
+              "перенеси zapret в другой каталог, например в C:\\zapret",
+        "en": "The path where Zapret is installed contains Cyrillic characters. "
+              "If bypass doesn't work, try to move Zapret to another directory, for example in C:\\zapret"},
+    "diag.cyrillic_ok": {"ru": "Проверка пути (кириллица) пройдена", "en": "Cyrillic path check passed"},
+    "diag.onedrive_bad": {
+        "ru": "Zapret установлен в папке OneDrive. Если обход не работает — перенеси "
+              "zapret в другой каталог, например в C:\\zapret",
+        "en": "Zapret is installed in a OneDrive folder. If bypass doesn't work, try to "
+              "move Zapret to another directory, for example in C:\\zapret"},
+    "diag.onedrive_ok": {"ru": "Проверка OneDrive пройдена", "en": "OneDrive check passed"},
+    "diag.windivert_ok": {
+        "ru": "Драйвер WinDivert присутствует: {f}",
+        "en": "WinDivert driver present: {f}"},
+    "diag.windivert_bad": {"ru": "Файл WinDivert64.sys НЕ найден в bin/", "en": "WinDivert64.sys file NOT found in bin/"},
+    "diag.windivert_bin_bad": {"ru": "Каталог bin не найден или недоступен", "en": "bin/ not found or unreadable"},
+    "diag.vpn_warn": {
+        "ru": "Найдены VPN-службы: {v}. Часть VPN конфликтует с zapret — отключи все VPN",
+        "en": "VPN services found: {v}. Some VPNs can conflict with zapret. Make sure that all VPNs are disabled"},
+    "diag.vpn_ok": {"ru": "Проверка VPN пройдена", "en": "VPN check passed"},
+    "diag.dns_ok": {"ru": "Проверка Secure DNS пройдена", "en": "Secure DNS check passed"},
+    "diag.dns_warn": {
+        "ru": "Настрой защищённый DNS в браузере у непоставленного по умолчанию провайдера",
+        "en": "Make sure you have configured secure DNS in a browser with some non-default DNS service provider"},
+    "diag.hosts_bad": {
+        "ru": "Файл hosts содержит записи для youtube.com или youtu.be — это может мешать YouTube",
+        "en": "Your hosts file contains entries for youtube.com or youtu.be. This may cause problems with YouTube access"},
+    "diag.hosts_ok": {"ru": "Проверка hosts пройдена", "en": "Hosts file check passed"},
+    "diag.wd_conflict_bad": {
+        "ru": "winws.exe не запущен, но служба WinDivert активна. Нажми «Remove conflicts», чтобы удалить её",
+        "en": "winws.exe is not running but WinDivert service is active. Press \"Remove conflicts\" to delete it"},
+    "diag.wd_conflict_ok": {"ru": "Проверка конфликта WinDivert пройдена", "en": "WinDivert conflict check passed"},
+    "diag.conflicts_bad": {
+        "ru": "Найдены конфликтные обходы: {c}. Нажми «Remove conflicts», чтобы удалить их",
+        "en": "Conflicting bypass services found: {c}. Press \"Remove conflicts\" to remove them"},
+    "diag.conflicts_ok": {"ru": "Конфликтных обходов не найдено", "en": "No conflicting bypasses found"},
+    "diag.discord_warn": {
+        "ru": "Найден Discord ({d}). Нажми «Clear Discord cache», чтобы очистить кэш",
+        "en": "Discord found ({d}). Press \"Clear Discord cache\" to clean it"},
+    "diag.discord_ok": {"ru": "Установки Discord не найдены", "en": "Discord installations were not found"},
+    "diag.summary": {
+        "ru": "Диагностика: {n} проверок, ошибок {b}, предупреждений {w}",
+        "en": "Diagnostics: {n} checks, {b} errors, {w} warnings"},
+
+    # ---------- remove_conflicts ----------
+    "sm.conflicts_no_admin": {
+        "ru": "Нет прав администратора — нужны для netsh/sc delete",
+        "en": "Administrator rights missing — required for netsh/sc delete"},
+    "sm.timestamps_enabled": {"ru": "включены", "en": "enabled"},
+    "sm.timestamps_failed": {"ru": "НЕ УДАЛОСЬ: {e}", "en": "FAILED: {e}"},
+    "sm.no_conflicts": {
+        "ru": "Конфликтных служб нет — удалять нечего",
+        "en": "No conflicting services found — nothing to remove"},
+
+    # ---------- тесты ----------
+    "tests.need_admin": {
+        "ru": "Требуются права администратора",
+        "en": "Run as Administrator to execute tests"},
+    "tests.need_curl": {
+        "ru": "curl.exe не найден — установи curl или добавь его в PATH",
+        "en": "curl.exe not found — install curl or add it to PATH"},
+    "tests.service_installed": {
+        "ru": "Служба zapret установлена — удали её перед запуском тестов "
+              "(как в оригинале: Remove Services -> Run Tests)",
+        "en": "Windows service 'zapret' is installed — remove the service before "
+              "running tests (as in the original: Remove Services -> Run Tests)"},
+    "tests.script_missing": {
+        "ru": "Не найден тест-скрипт: {p}",
+        "en": "Test script not found: {p}"},
+    "tests.not_started": {
+        "ru": "Тесты не запущены: {p}",
+        "en": "Tests not started: {p}"},
+    "tests.ps_fail": {
+        "ru": "Не удалось запустить PowerShell: {e}",
+        "en": "Failed to launch PowerShell: {e}"},
+    "tests.timeout": {"ru": "[X] Таймаут тестов — процесс остановлен", "en": "[X] Tests timeout — process killed"},
+    "tests.results_saved": {"ru": "результаты сохранены", "en": "results saved"},
+    "tests.done": {"ru": "Тесты завершены за {t} с{tail}", "en": "Tests finished in {t}s{tail}"},
+    "tests.aborted": {"ru": "Тесты прерваны с ошибкой — см. вывод", "en": "Tests aborted with an error — see output"},
+    "tests.prereq_ok": {"ru": "Условия выполнены — можно запускать", "en": "All conditions met — ready to run"},
+    "tests.wont_start": {"ru": "Тесты не запустятся: {p}", "en": "Tests won't start: {p}"},
+
+    # ---------- relaunch / статус ----------
+    "sm.relaunch_ok": {"ru": "Перезапуск с правами администратора", "en": "Relaunching with administrator rights"},
+    "sm.relaunch_fail": {"ru": "Не удалось запустить с повышением прав", "en": "Failed to relaunch elevated"},
+
+    # ---------- PySide6 UI ----------
+    "ui.strategy": {"ru": "Стратегия:", "en": "Strategy:"},
+    "ui.apply": {"ru": "Применить", "en": "Apply"},
+    "ui.lang": {"ru": "Язык:", "en": "Language:"},
+    "ui.status_unknown": {"ru": "Неизвестно", "en": "Unknown"},
+    "ui.output": {"ru": "ВЫВОД", "en": "OUTPUT"},
+    "ui.footer": {
+        "ru": "zapret-simple — нативный SCM (pywin32) | без service.bat | PySide6 6.12 | Python 3.15+",
+        "en": "zapret-simple — native SCM (pywin32) | no service.bat | PySide6 6.12 | Python 3.15+"},
+    "ui.footer_tk": {
+        "ru": "zapret-simple — нативный SCM (pywin32) | без service.bat | Python 3.15+",
+        "en": "zapret-simple — native SCM (pywin32) | no service.bat | Python 3.15+"},
+    "ui.ready_msg": {
+        "ru": "Готово. Меню как в оригинальном service.bat — все действия работают через service_manager.",
+        "en": "Ready. Menu matches the original service.bat — all actions go through service_manager."},
+    # секции
+    "ui.sec_service": {"ru": ":: СЕРВИС", "en": ":: SERVICE"},
+    "ui.sec_settings": {"ru": ":: НАСТРОЙКИ", "en": ":: SETTINGS"},
+    "ui.sec_updates": {"ru": ":: ОБНОВЛЕНИЯ", "en": ":: UPDATES"},
+    "ui.sec_tools": {"ru": ":: ИНСТРУМЕНТЫ", "en": ":: TOOLS"},
+    "ui.sec_control_tk": {"ru": "УПРАВЛЕНИЕ СЕРВИСОМ (SCM — без .bat)", "en": "SERVICE CONTROL (SCM — no .bat)"},
+    # пункты меню
+    "ui.install_service": {"ru": "1.  Установить службу", "en": "1.  Install Service"},
+    "ui.remove_services": {"ru": "2.  Удалить службы", "en": "2.  Remove Services"},
+    "ui.check_status": {"ru": "3.  Проверить статус", "en": "3.  Check Status"},
+    "ui.start_service": {"ru": "Запустить службу", "en": "Start Service"},
+    "ui.stop_service": {"ru": "Остановить службу", "en": "Stop Service"},
+    "ui.admin_rights": {"ru": "Права админа", "en": "Admin rights"},
+    "ui.game_filter": {"ru": "4.  Игровой фильтр", "en": "4.  Game Filter"},
+    "ui.ipset_filter": {"ru": "5.  IPSet фильтр", "en": "5.  IPSet Filter"},
+    "ui.autoupdate_check": {"ru": "6.  Проверка обновлений", "en": "6.  Auto-Update Check"},
+    "ui.replace_fakes": {"ru": "7.  Заменить активные fakes", "en": "7.  Replace active fakes"},
+    "ui.update_ipset": {"ru": "8.  Обновить IPSet список", "en": "8.  Update IPSet List"},
+    "ui.update_hosts": {"ru": "9.  Обновить hosts-файл", "en": "9.  Update Hosts File"},
+    "ui.check_updates": {"ru": "10. Проверить обновления", "en": "10. Check for Updates"},
+    "ui.run_diagnostics": {"ru": "11. Запустить диагностику", "en": "11. Run Diagnostics"},
+    "ui.run_tests": {"ru": "12. Запустить тесты", "en": "12. Run Tests"},
+    "ui.remove_conflicts": {"ru": "Удалить конфликты", "en": "Remove conflicts"},
+    "ui.clear_discord": {"ru": "Очистить кэш Discord", "en": "Clear Discord cache"},
+    "ui.restore_payload": {"ru": "Восстановить payload (.bin)", "en": "Restore payload (.bin)"},
+    # игровые режимы
+    "ui.gf_disabled": {"ru": "выключен", "en": "disabled"},
+    "ui.gf_all": {"ru": "Все (TCP и UDP)", "en": "All (TCP and UDP)"},
+    "ui.gf_tcp": {"ru": "TCP", "en": "TCP"},
+    "ui.gf_udp": {"ru": "UDP", "en": "UDP"},
+    # диалог fake
+    "ui.fake_dialog_title": {"ru": "Замена активного fake", "en": "Replace Active Fake"},
+    "ui.fake_kind": {"ru": "Тип fake:", "en": "Fake type:"},
+    "ui.fake_kind_1": {"ru": "1 — Discord UDP", "en": "1 — Discord UDP"},
+    "ui.fake_kind_2": {"ru": "2 — GameFilter UDP", "en": "2 — GameFilter UDP"},
+    "ui.fake_number": {"ru": "Номер файла:", "en": "File number:"},
+    # диалог тестов
+    "ui.tests_dialog_title": {"ru": "Запуск тестов", "en": "Run Tests"},
+    "ui.tests_kind": {"ru": "Тип теста:", "en": "Test type:"},
+    "ui.tests_kind_std": {"ru": "Стандартные (HTTP/ping)", "en": "Standard tests (HTTP/ping)"},
+    "ui.tests_kind_dpi": {"ru": "DPI-чекеры (TCP 16-20 freeze)", "en": "DPI checkers (TCP 16-20 freeze)"},
+    "ui.tests_mode": {"ru": "Режим:", "en": "Mode:"},
+    "ui.tests_mode_all": {"ru": "Все конфиги", "en": "All configs"},
+    "ui.tests_mode_sel": {"ru": "Выбранные конфиги", "en": "Selected configs"},
+    "ui.tests_sel_config": {"ru": "Конфиг (при Selected):", "en": "Config (for Selected):"},
+    "ui.tests_note": {
+        "ru": "Тесты требуют прав администратора и УДАЛЁННОЙ службы zapret (как в оригинале). "
+              "Идут несколько минут.",
+        "en": "Tests require administrator rights and the zapret service REMOVED (as in the "
+              "original). Takes several minutes."},
+    "ui.ok": {"ru": "ОК", "en": "OK"},
+    "ui.cancel": {"ru": "Отмена", "en": "Cancel"},
+    # сообщения вывода PySide
+    "ui.err_no_strategy": {"ru": "[X] Стратегия не выбрана", "en": "[X] No strategy selected"},
+    "ui.apply_need_admin": {
+        "ru": "[X] Применение стратегии требует прав администратора — нажми «Права админа» и повтори",
+        "en": "[X] Applying a strategy requires administrator rights — press \"Admin rights\" and retry"},
+    "ui.applying_strategy": {
+        "ru": ">>> Применение стратегии: {s} (служба будет перезапущена)...",
+        "en": ">>> Applying strategy: {s} (the service will be restarted)..."},
+    "ui.games_running": {"ru": "[?] Тесты уже выполняются", "en": "[?] Tests are already running"},
+    "ui.fix_errors": {"ru": "Исправь ошибки выше и запусти снова.", "en": "Fix the errors above and rerun."},
+    "ui.running_tests": {
+        "ru": ">>> Запуск тестов: тип {t}, режим {m} (идёт несколько минут)...",
+        "en": ">>> Running tests: type {t}, mode {m} (takes several minutes)..."},
+    "ui.no_bins": {"ru": "[X] Нет .bin файлов в bin/", "en": "[X] No .bin files in bin/"},
+    "ui.fakes_list": {"ru": "Fake-файлы:", "en": "Fake files:"},
+    "ui.payload_warn_tk": {"ru": "⚠ нет .bin: {n} — клик для восстановления", "en": "⚠ missing .bin: {n} — click to restore"},
+    "ui.payload_warn": {"ru": "⚠ нет .bin: {n} — восстановить", "en": "⚠ missing .bin: {n} — restore"},
+    "ui.tk_root_title": {"ru": "Zapret — обход DPI", "en": "Zapret — DPI Bypass"},
+    "ui.tk_format_err": {"ru": "[X] Формат: <тип> <номер>, например 1 3", "en": "[X] Format: <type> <number>, e.g. 1 3"},
+    "ui.tk_strategy_err": {"ru": "[X] Стратегия не выбрана", "en": "[X] No strategy selected"},
+    "ui.tk_need_admin": {
+        "ru": "[X] Применение стратегии требует прав администратора — "
+              "запусти от администратора (кнопка «Админ»)",
+        "en": "[X] Applying a strategy requires administrator rights — "
+              "run as administrator (the \"Admin\" button)"},
+    "ui.tk_applying": {
+        "ru": ">>> Применение стратегии: {s} (служба будет перезапущена)...",
+        "en": ">>> Applying strategy: {s} (the service will be restarted)..."},
+    "ui.tk_running": {"ru": ">>> Выполняется: {a}", "en": ">>> Running: {a}"},
+    "ui.tk_admin_btn": {"ru": "Админ", "en": "Admin"},
+    "ui.tk_ready": {
+        "ru": "Готово. Нажми любую кнопку.\nВсе функции работают через service_manager (без .bat).",
+        "en": "Ready. Press any button.\nAll functions go through service_manager (no .bat)."},
+    "ui.tk_error": {"ru": "[ОШИБКА]", "en": "[ERROR]"},
+    "ui.tk_fake_prompt": {
+        "ru": "Введите: тип (1=Discord UDP, 2=GameFilter UDP) и номер fake-файла\n"
+              "Например: 1 3",
+        "en": "Enter: type (1=Discord UDP, 2=GameFilter UDP) and fake file number\n"
+              "Example: 1 3"},
+    # короткие кнопки tkinter-сетки
+    "ui.tk_status": {"ru": "Статус", "en": "Status"},
+    "ui.tk_install": {"ru": "Установить", "en": "Install Svc"},
+    "ui.tk_uninstall": {"ru": "Удалить", "en": "Uninstall"},
+    "ui.tk_start": {"ru": "Старт", "en": "Start"},
+    "ui.tk_stop": {"ru": "Стоп", "en": "Stop"},
+    "ui.tk_diag": {"ru": "Диагностика", "en": "Diag"},
+    "ui.tk_test": {"ru": "Тесты", "en": "Test"},
+    "ui.tk_update": {"ru": "Обновить", "en": "Update"},
+    "ui.tk_gamefilter": {"ru": "Игровой фильтр", "en": "GameFilter"},
+    "ui.tk_discord": {"ru": "Очистить Discord", "en": "Clear Discord"},
+    "ui.tk_fakes": {"ru": "Список fakes", "en": "List Fakes"},
+    "ui.tk_restore": {"ru": "Восстановить payload", "en": "Restore Payload"},
+    "ui.tk_ipset": {"ru": "Обновить IPSet", "en": "IPSet Update"},
+    # ---------- web API (main.py) ----------
+    "sm.use_post": {
+        "ru": "Используй POST (CSRF protection)",
+        "en": "Use POST (CSRF protection)"},
+    "ui.tests_bg_started": {
+        "ru": "Тесты запущены в фоне — полли /api/tests_state",
+        "en": "Tests started in background — poll /api/tests_state"},
+}

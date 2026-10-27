@@ -25,8 +25,12 @@ class TestPySideUI(unittest.TestCase):
     def setUpClass(cls):
         # Импорт внутри setUpClass: QApplication создаётся один раз на процесс
         import zapret_pyside as z
+        import i18n
         from PySide6.QtWidgets import QApplication, QPushButton, QComboBox, QLabel
         cls.z = z
+        cls.i18n = i18n
+        # Детерминированный язык: пункты меню сверяются с en-паритетом service.bat
+        i18n.set_lang("en")
         cls.QPushButton = QPushButton
         cls.QComboBox = QComboBox
         cls.QLabel = QLabel
@@ -36,6 +40,7 @@ class TestPySideUI(unittest.TestCase):
     @classmethod
     def tearDownClass(cls):
         cls.win.close()
+        cls.i18n.set_lang("ru")  # не тащим тестовый язык в остальные тесты
 
     def _btn_texts(self):
         return [b.text() for b in self.win.findChildren(self.QPushButton)]
@@ -43,21 +48,27 @@ class TestPySideUI(unittest.TestCase):
     def test_all_buttons_present(self):
         # Пункты меню — 12 как в оригинальном service.bat + доп. действия
         texts = self._btn_texts()
-        for a in ["1.  Install Service", "2.  Remove Services", "3.  Check Status",
-                  "4.  Game Filter", "5.  IPSet Filter", "6.  Auto-Update Check",
-                  "7.  Replace active fakes", "8.  Update IPSet List",
-                  "9.  Update Hosts File", "10. Check for Updates",
-                  "11. Run Diagnostics", "12. Run Tests",
-                  "Start Service", "Stop Service", "Admin (права)",
-                  "Remove conflicts", "Clear Discord cache", "Restore payload (.bin)"]:
+        for key in ["ui.install_service", "ui.remove_services", "ui.check_status",
+                    "ui.game_filter", "ui.ipset_filter", "ui.autoupdate_check",
+                    "ui.replace_fakes", "ui.update_ipset", "ui.update_hosts",
+                    "ui.check_updates", "ui.run_diagnostics", "ui.run_tests",
+                    "ui.start_service", "ui.stop_service", "ui.admin_rights",
+                    "ui.remove_conflicts", "ui.clear_discord", "ui.restore_payload"]:
+            a = self.i18n.t(key)
             self.assertIn(a, texts, f"Пункт {a} отсутствует")
 
     def test_menu_sections_like_original(self):
         # Секции меню — как в service.bat: :: SERVICE/SETTINGS/UPDATES/TOOLS
         secs = [l.text() for l in self.win.findChildren(self.QLabel)
                 if l.objectName() == "section"]
-        for s in [":: SERVICE", ":: SETTINGS", ":: UPDATES", ":: TOOLS"]:
+        for key in ["ui.sec_service", "ui.sec_settings", "ui.sec_updates", "ui.sec_tools"]:
+            s = self.i18n.t(key)
             self.assertIn(s, secs, f"Секция {s} отсутствует")
+
+    def test_lang_switcher_present(self):
+        # Переключатель ru/en в шапке (паритет с вебом)
+        self.assertTrue(any(b.text() in ("RU", "EN") for b in self.win.findChildren(self.QPushButton)),
+                        "Нет кнопки переключения языка")
 
     def test_strategy_selector_populated(self):
         # Комбобокс стратегий реально заполнен из list_strategies() (реальные .bat)
@@ -75,7 +86,7 @@ class TestPySideUI(unittest.TestCase):
         for _ in range(40):
             self.app.processEvents()
             time.sleep(0.02)
-            if self.win.status_text.text() not in ("Неизвестно", ""):
+            if self.win.status_text.text() not in (self.i18n.t("ui.status_unknown"), ""):
                 break
         self.assertNotEqual(self.win.status_text.text(), "")
 

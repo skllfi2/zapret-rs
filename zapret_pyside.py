@@ -7,6 +7,8 @@
 import sys, os, html
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import service_manager
+import i18n
+from i18n import t
 
 try:
     from PySide6.QtCore import Qt, QObject, QRunnable, QThreadPool, Signal, Slot, QTimer
@@ -111,15 +113,15 @@ class FakeDialog(QDialog):
     """Замена fake-файла (аналог :replace_active_fakes_prompt)."""
     def __init__(self, parent=None):
         super().__init__(parent)
-        self.setWindowTitle("Replace Active Fake")
+        self.setWindowTitle(t("ui.fake_dialog_title"))
         form = QFormLayout(self)
         self.kind = QComboBox()
-        self.kind.addItem("1 — Discord UDP", "1")
-        self.kind.addItem("2 — GameFilter UDP", "2")
+        self.kind.addItem(t("ui.fake_kind_1"), "1")
+        self.kind.addItem(t("ui.fake_kind_2"), "2")
         self.number = QSpinBox()
         self.number.setRange(1, 99)
-        form.addRow("Тип fake:", self.kind)
-        form.addRow("Номер файла:", self.number)
+        form.addRow(t("ui.fake_kind"), self.kind)
+        form.addRow(t("ui.fake_number"), self.number)
         buttons = QDialogButtonBox(QDialogButtonBox.Ok | QDialogButtonBox.Cancel)
         buttons.accepted.connect(self.accept)
         buttons.rejected.connect(self.reject)
@@ -133,24 +135,23 @@ class TestDialog(QDialog):
     """Выбор типа/режима тестов — как два Read-Host в оригинальном test zapret.ps1."""
     def __init__(self, parent=None):
         super().__init__(parent)
-        self.setWindowTitle("Run Tests")
+        self.setWindowTitle(t("ui.tests_dialog_title"))
         form = QFormLayout(self)
         self.kind = QComboBox()
-        self.kind.addItem("Standard tests (HTTP/ping)", 1)
-        self.kind.addItem("DPI checkers (TCP 16-20 freeze)", 2)
+        self.kind.addItem(t("ui.tests_kind_std"), 1)
+        self.kind.addItem(t("ui.tests_kind_dpi"), 2)
         self.mode = QComboBox()
-        self.mode.addItem("All configs", 1)
-        self.mode.addItem("Selected configs", 2)
+        self.mode.addItem(t("ui.tests_mode_all"), 1)
+        self.mode.addItem(t("ui.tests_mode_sel"), 2)
         self.selection = QSpinBox()
         self.selection.setRange(1, 99)
         self.selection.setEnabled(False)
         self.mode.currentIndexChanged.connect(
             lambda i: self.selection.setEnabled(self.mode.currentData() == 2))
-        form.addRow("Тип теста:", self.kind)
-        form.addRow("Режим:", self.mode)
-        form.addRow("Конфиг (при Selected):", self.selection)
-        note = QLabel("Тесты требуют прав администратора и УДАЛЁННОЙ службы zapret "
-                      "(как в оригинале). Идут несколько минут.")
+        form.addRow(t("ui.tests_kind"), self.kind)
+        form.addRow(t("ui.tests_mode"), self.mode)
+        form.addRow(t("ui.tests_sel_config"), self.selection)
+        note = QLabel(t("ui.tests_note"))
         note.setWordWrap(True)
         note.setObjectName("footer")
         form.addRow(note)
@@ -171,8 +172,8 @@ class MainWindow(QMainWindow):
     def __init__(self):
         super().__init__()
         self.setWindowTitle("ZAPRET SERVICE MANAGER")
-        self.resize(780, 660)
-        self.setMinimumSize(640, 520)
+        self.resize(1120, 680)
+        self.setMinimumSize(960, 520)
 
         self.pool = QThreadPool.globalInstance()
         self._workers = set()
@@ -217,16 +218,22 @@ class MainWindow(QMainWindow):
         left.addLayout(trow)
         # Strategy + выбор (в оригинале строка "Strategy: X" под заголовком)
         srow = QHBoxLayout()
-        srow.addWidget(QLabel("Strategy:", objectName="version"))
+        srow.addWidget(QLabel(t("ui.strategy"), objectName="version"))
         self.strat_box = QComboBox()
         self.strat_box.setFixedWidth(230)
         self.strat_box.currentTextChanged.connect(lambda _: self.apply_strategy())
         srow.addWidget(self.strat_box)
-        apply_btn = QPushButton("Применить", objectName="small")
+        apply_btn = QPushButton(t("ui.apply"), objectName="small")
         apply_btn.setFixedWidth(100)
         apply_btn.clicked.connect(self.apply_strategy)
         srow.addWidget(apply_btn)
         srow.addStretch()
+        # Переключатель языка ru/en (как в вебе — выбор сохраняется)
+        self.lang_btn = QPushButton(i18n.LANG.upper(), objectName="small")
+        self.lang_btn.setFixedSize(46, 26)
+        self.lang_btn.setToolTip(t("ui.lang"))
+        self.lang_btn.clicked.connect(self._switch_lang)
+        srow.addWidget(self.lang_btn)
         left.addLayout(srow)
         h.addLayout(left, 1)
 
@@ -239,7 +246,7 @@ class MainWindow(QMainWindow):
         self.dot.setStyleSheet(f"background-color: {COLORS['text_muted']}; border-radius: 6px;")
         srow2.addWidget(self.dot)
         srow2.addSpacing(6)
-        self.status_text = QLabel("Неизвестно")
+        self.status_text = QLabel(t("ui.status_unknown"))
         self.status_text.setObjectName("status")
         srow2.addWidget(self.status_text)
         right.addLayout(srow2)
@@ -251,6 +258,12 @@ class MainWindow(QMainWindow):
         h.addLayout(right)
         lay.addWidget(header)
 
+        # ===== Тело: меню слева, вывод справа — читается одновременно =====
+        body = QHBoxLayout()
+        body.setSpacing(12)
+        lay.addLayout(body, 1)
+        lay.setContentsMargins(14, 12, 14, 12)
+
         # ===== Меню-секции =====
         card = QFrame()
         card.setObjectName("card")
@@ -258,76 +271,80 @@ class MainWindow(QMainWindow):
         c = QVBoxLayout(card)
         c.setContentsMargins(16, 10, 16, 10)
         c.setSpacing(6)
-        lay.addWidget(card, 0)
-        lay.setContentsMargins(14, 12, 14, 12)
+        body.addWidget(card, 3)
 
         # --- :: SERVICE (пункты 1-3 как в оригинале + Start/Stop) ---
-        c.addWidget(QLabel(":: SERVICE", objectName="section"))
+        c.addWidget(QLabel(t("ui.sec_service"), objectName="section"))
         g = QGridLayout()
         g.setSpacing(6)
-        self._menu_btn(g, 0, 0, "1.  Install Service", lambda: self.run_action("service_install"))
-        self._menu_btn(g, 0, 1, "2.  Remove Services", lambda: self.run_action("service_remove"))
-        self._menu_btn(g, 1, 0, "3.  Check Status", lambda: self.run_action("service_status"))
-        self._menu_btn(g, 1, 1, "Start Service", lambda: self.run_action("start"))
-        self._menu_btn(g, 1, 2, "Stop Service", lambda: self.run_action("stop"))
-        self._menu_btn(g, 0, 2, "Admin (права)", lambda: self.run_action("relaunch_admin"))
+        self._menu_btn(g, 0, 0, t("ui.install_service"), lambda: self.run_action("service_install"))
+        self._menu_btn(g, 0, 1, t("ui.remove_services"), lambda: self.run_action("service_remove"))
+        self._menu_btn(g, 1, 0, t("ui.check_status"), lambda: self.run_action("service_status"))
+        self._menu_btn(g, 1, 1, t("ui.start_service"), lambda: self.run_action("start"))
+        self._menu_btn(g, 1, 2, t("ui.stop_service"), lambda: self.run_action("stop"))
+        self._menu_btn(g, 0, 2, t("ui.admin_rights"), lambda: self.run_action("relaunch_admin"))
         g.setColumnStretch(0, 3)
         g.setColumnStretch(1, 3)
         g.setColumnStretch(2, 2)
         c.addLayout(g)
 
         # --- :: SETTINGS (4-7, статусы в []) ---
-        c.addWidget(QLabel(":: SETTINGS", objectName="section"))
+        c.addWidget(QLabel(t("ui.sec_settings"), objectName="section"))
         g = QGridLayout()
         g.setSpacing(6)
-        gf_btn = self._menu_btn(g, 0, 0, "4.  Game Filter", self._game_filter_menu)
+        gf_btn = self._menu_btn(g, 0, 0, t("ui.game_filter"), self._game_filter_menu)
         self._status_cell(g, 0, 1, "lbl_gf")
-        self._menu_btn(g, 1, 0, "5.  IPSet Filter", lambda: self.run_action("toggle_ipset"))
+        self._menu_btn(g, 1, 0, t("ui.ipset_filter"), lambda: self.run_action("toggle_ipset"))
         self._status_cell(g, 1, 1, "lbl_ipset")
-        self._menu_btn(g, 2, 0, "6.  Auto-Update Check", lambda: self.run_action("toggle_check_updates"))
+        self._menu_btn(g, 2, 0, t("ui.autoupdate_check"), lambda: self.run_action("toggle_check_updates"))
         self._status_cell(g, 2, 1, "lbl_upd")
-        self._menu_btn(g, 3, 0, "7.  Replace active fakes", self.show_fakes)
+        self._menu_btn(g, 3, 0, t("ui.replace_fakes"), self.show_fakes)
         g.setColumnStretch(0, 2)
         g.setColumnStretch(1, 3)
         c.addLayout(g)
 
         # --- :: UPDATES (8-10) ---
-        c.addWidget(QLabel(":: UPDATES", objectName="section"))
+        c.addWidget(QLabel(t("ui.sec_updates"), objectName="section"))
         g = QGridLayout()
         g.setSpacing(6)
-        self._menu_btn(g, 0, 0, "8.  Update IPSet List", lambda: self.run_action("ipset_update"))
-        self._menu_btn(g, 0, 1, "9.  Update Hosts File", lambda: self.run_action("update_hosts"))
-        self._menu_btn(g, 1, 0, "10. Check for Updates", lambda: self.run_action("check_updates"))
+        self._menu_btn(g, 0, 0, t("ui.update_ipset"), lambda: self.run_action("ipset_update"))
+        self._menu_btn(g, 0, 1, t("ui.update_hosts"), lambda: self.run_action("update_hosts"))
+        self._menu_btn(g, 1, 0, t("ui.check_updates"), lambda: self.run_action("check_updates"))
         g.setColumnStretch(0, 1)
         g.setColumnStretch(1, 1)
         c.addLayout(g)
 
         # --- :: TOOLS (11-12 + доп. действия) ---
-        c.addWidget(QLabel(":: TOOLS", objectName="section"))
+        c.addWidget(QLabel(t("ui.sec_tools"), objectName="section"))
         g = QGridLayout()
         g.setSpacing(6)
-        self._menu_btn(g, 0, 0, "11. Run Diagnostics", self.run_diagnostics)
-        tests_btn = self._menu_btn(g, 0, 1, "12. Run Tests", self.run_tests)
-        self._menu_btn(g, 1, 0, "Remove conflicts", lambda: self.run_action("remove_conflicts"))
-        self._menu_btn(g, 1, 1, "Clear Discord cache", lambda: self.run_action("clear_discord"))
-        self._menu_btn(g, 2, 0, "Restore payload (.bin)", lambda: self.run_action("restore_payloads"))
+        self._menu_btn(g, 0, 0, t("ui.run_diagnostics"), self.run_diagnostics)
+        tests_btn = self._menu_btn(g, 0, 1, t("ui.run_tests"), self.run_tests)
+        self._menu_btn(g, 1, 0, t("ui.remove_conflicts"), lambda: self.run_action("remove_conflicts"))
+        self._menu_btn(g, 1, 1, t("ui.clear_discord"), lambda: self.run_action("clear_discord"))
+        self._menu_btn(g, 2, 0, t("ui.restore_payload"), lambda: self.run_action("restore_payloads"))
         g.setColumnStretch(0, 1)
         g.setColumnStretch(1, 1)
         c.addLayout(g)
+        c.addStretch(1)  # пункты меню прижаты вверх, не слипаются с выводом
 
-        # --- ВЫВОД (цветной, как PrintGreen/Red/Yellow) ---
-        c.addWidget(QLabel("ВЫВОД", objectName="section"))
+        # ===== Правая панель: ВЫВОД (цветной, как PrintGreen/Red/Yellow) =====
+        out_panel = QFrame()
+        out_panel.setObjectName("card")
+        out_panel.setStyleSheet(f"QFrame#card {{ background-color: {COLORS['bg_card']}; border-radius: 10px; }}")
+        o = QVBoxLayout(out_panel)
+        o.setContentsMargins(14, 10, 14, 10)
+        o.setSpacing(6)
+        o.addWidget(QLabel(t("ui.output"), objectName="section"))
         self.output = QTextEdit()
         self.output.setReadOnly(True)
-        self.output.setMinimumHeight(130)
-        c.addWidget(self.output, 1)
-
-        c.addWidget(QLabel("zapret-simple — native SCM (pywin32) | без service.bat | "
-                           "PySide6 6.12 | Python 3.15+", objectName="footer"))
+        self.output.setMinimumWidth(360)
+        o.addWidget(self.output, 1)
+        o.addWidget(QLabel(t("ui.footer"), objectName="footer"))
+        body.addWidget(out_panel, 2)
 
         self.setCentralWidget(root)
-        self.add_out("Готово. Меню как в оригинальном service.bat — все действия работают "
-                     "через service_manager.", "info")
+        self.add_out(t("ui.ready_msg"), "info")
 
     def _menu_btn(self, grid, row, col, text, cmd):
         btn = QPushButton(text)
@@ -335,6 +352,17 @@ class MainWindow(QMainWindow):
         btn.clicked.connect(cmd)
         grid.addWidget(btn, row, col)
         return btn
+
+    def _switch_lang(self):
+        """Переключатель ru/en: сохраняет выбор и перестраивает окно (как в вебе)."""
+        i18n.save("en" if i18n.LANG == "ru" else "ru")
+        old = self.takeCentralWidget()
+        if old is not None:
+            old.deleteLater()
+        self._build_ui()
+        self._load_strategies()
+        self.refresh()
+        self.refresh_menu_status()
 
     def _status_cell(self, grid, row, col, attr):
         lbl = QLabel("—")
@@ -382,13 +410,12 @@ class MainWindow(QMainWindow):
     def apply_strategy(self):
         sid = self.strat_box.currentText()
         if not sid:
-            self.add_out("[ERR] Стратегия не выбрана", "bad")
+            self.add_out(t("ui.err_no_strategy"), "bad")
             return
         if not service_manager.is_admin():
-            self.add_out("[X] Применение стратегии требует прав администратора — "
-                         "нажми «Admin (права)» и повтори", "bad")
+            self.add_out(t("ui.apply_need_admin"), "bad")
             return
-        self.add_out(f">>> Применение стратегии: {sid} (служба будет перезапущена)...", "info")
+        self.add_out(t("ui.applying_strategy", s=sid), "info")
         self.submit(service_manager.apply_strategy, self._apply_done, sid)
 
     def _apply_done(self, r):
@@ -426,8 +453,8 @@ class MainWindow(QMainWindow):
     # ---------- Game Filter: подменю режимов (как :game_switch) ----------
     def _game_filter_menu(self):
         menu = QMenu(self)
-        for name, mode in [("disabled", "disabled"), ("All (TCP and UDP)", "all"),
-                           ("TCP", "tcp"), ("UDP", "udp")]:
+        for name, mode in [(t("ui.gf_disabled"), "disabled"), (t("ui.gf_all"), "all"),
+                           (t("ui.gf_tcp"), "tcp"), (t("ui.gf_udp"), "udp")]:
             act = QAction(name, menu)
             act.triggered.connect(lambda _, m=mode: self._set_game_filter(m))
             menu.addAction(act)
@@ -440,7 +467,7 @@ class MainWindow(QMainWindow):
 
     # ---------- Диагностика (17 проверок оригинала) ----------
     def run_diagnostics(self):
-        self.add_out(">>> Run Diagnostics (все проверки из service.bat)...", "info")
+        self.add_out(f">>> {t('ui.run_diagnostics')}...", "info")
         self.submit(service_manager.run_diagnostics, self._diag_done)
 
     def _diag_done(self, r):
@@ -460,7 +487,7 @@ class MainWindow(QMainWindow):
     # ---------- Тесты (оригинальный test zapret.ps1) ----------
     def run_tests(self):
         if self._tests_running:
-            self.add_out("[?] Тесты уже выполняются", "warn")
+            self.add_out(t("ui.games_running"), "warn")
             return
         self.submit(service_manager.run_service_action, self._tests_prereq_done,
                     "tests_prereq")
@@ -469,14 +496,14 @@ class MainWindow(QMainWindow):
         if not r.get("ok"):
             for p in r.get("problems", []):
                 self.add_out(f"[X] {p}", "bad")
-            self.add_out("Fix the errors above and rerun.", "warn")
+            self.add_out(t("ui.fix_errors"), "warn")
             return
         dlg = TestDialog(self)
         if dlg.exec() != QDialog.Accepted:
             return
         kind, mode, sel = dlg.values()
         self._tests_running = True
-        self.add_out(f">>> Run Tests: type={kind}, mode={mode} (идёт несколько минут)...", "info")
+        self.add_out(t("ui.running_tests", t=kind, m=mode), "info")
         # Живой вывод: колбэк вызывается из рабочего потока, в UI — только через сигнал
         w = Worker(service_manager.run_tests, test_type=kind, mode=mode, selection=sel,
                    on_line=self._emit_line)
@@ -536,7 +563,7 @@ class MainWindow(QMainWindow):
         self._busy = False
         d = d if isinstance(d, dict) else {}
         running = d.get("running", False)
-        self.status_text.setText(d.get("status", "Неизвестно"))
+        self.status_text.setText(d.get("status", t("ui.status_unknown")))
         color = COLORS["success"] if running else COLORS["danger"]
         self.status_text.setStyleSheet(f"color: {color}; font-weight: bold;")
         self.dot.setStyleSheet(f"background-color: {color}; border-radius: 6px;")
@@ -544,7 +571,7 @@ class MainWindow(QMainWindow):
         if pl.get("ok", True):
             self.payload_warn.setText("")
         else:
-            self.payload_warn.setText(f"⚠ нет .bin: {len(pl['missing'])} — восстановить")
+            self.payload_warn.setText(t("ui.payload_warn", n=len(pl['missing'])))
 
     def refresh_menu_status(self):
         """Статусы в квадратных скобках + версия (как шапка меню service.bat)."""
@@ -574,7 +601,7 @@ class MainWindow(QMainWindow):
         r = r if isinstance(r, dict) else {}
         items = r.get("stdout") or []
         if not items:
-            self.add_out("[X] Нет .bin файлов в bin/", "bad")
+            self.add_out(t("ui.no_bins"), "bad")
             return
         lines, num = [], 0
         for f in items:
@@ -583,7 +610,7 @@ class MainWindow(QMainWindow):
             else:
                 num += 1
                 lines.append(f"  {num}. {f['name']}  {f['sha256']}")
-        self.add_out("Fake-файлы:", "info")
+        self.add_out(t("ui.fakes_list"), "info")
         for l in lines:
             self.add_out(l, "info")
         dlg = FakeDialog(self)

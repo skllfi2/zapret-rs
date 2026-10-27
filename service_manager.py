@@ -2,6 +2,7 @@
 # Без вызова .bat файлов — всё через pywin32 + subprocess (CREATE_NO_WINDOW)
 import os, re, shlex, shutil, subprocess, time, threading, sys, winreg, ctypes
 import win32serviceutil, win32service, win32con
+from i18n import t
 
 # === Автоопределение каталога zapret (без хардкода одной копии) ===
 # Порядок: переменная окружения ZAPRET_DIR -> рабочая копия AppWatch -> ~/Pictures.
@@ -34,8 +35,7 @@ def install_service(exe_path=None):
         return False, f"Binary not found: {exe_path}"
     if exe_path.lower().endswith(".bat"):
         # .bat не может быть binPath службы (SCM вернёт 1053) — честный отказ вместо тихой ошибки
-        return False, (f".bat нельзя указывать как binPath службы: {exe_path}. "
-                       "Служба zapret устанавливается оригинальным service.bat и запускает winws.exe.")
+        return False, t("sm.bat_as_bin", exe=exe_path)
     try:
         # sc требует пробел после "binPath=" — значение отдельным токеном с пробелом
         res = subprocess.run(["sc", "create", SERVICE_NAME, "binPath= " + exe_path, "start=", "demand"],
@@ -115,20 +115,19 @@ def replace_fakes(fake_type=None, number=None):
     import shutil, hashlib
     if fake_type is None or number is None:
         return {"ok": False, "stdout": "",
-                "stderr": "Нужен выбор: fake_type (1=Discord, 2=GameFilter) и номер fake-файла. "
-                          "Сначала вызови list_fakes."}
+                "stderr": t("sm.fake_need_choice")}
     active_map = {"1": "ACTIVE_DISCORD_UDP.bin", "2": "ACTIVE_GAME_UDP.bin"}
     active_name = active_map.get(str(fake_type))
     if not active_name:
-        return {"ok": False, "stdout": "", "stderr": f"Неизвестный тип fake: {fake_type} (нужен 1 или 2)"}
+        return {"ok": False, "stdout": "", "stderr": t("sm.fake_unknown_type", t=fake_type)}
     fakes = [f for f in sorted(os.listdir(BIN_DIR))
              if f.lower().endswith(".bin") and not f.upper().startswith("ACTIVE_")]
     try:
         idx = int(number)
     except (TypeError, ValueError):
-        return {"ok": False, "stdout": "", "stderr": f"Номер должен быть числом, получено: {number}"}
+        return {"ok": False, "stdout": "", "stderr": t("sm.fake_number_not_int", n=number)}
     if not (1 <= idx <= len(fakes)):
-        return {"ok": False, "stdout": "", "stderr": f"Номер {idx} вне диапазона 1..{len(fakes)}"}
+        return {"ok": False, "stdout": "", "stderr": t("sm.fake_number_range", i=idx, n=len(fakes))}
     source = os.path.join(BIN_DIR, fakes[idx - 1])
     active = os.path.join(BIN_DIR, active_name)
     try:
@@ -156,7 +155,7 @@ def list_fakes():
             h = "?"
         items.append({"name": f, "sha256": h, "active": f.upper().startswith("ACTIVE_")})
     return {"ok": True, "stdout": items,
-            "note": "ACTIVE_* — текущие; остальные нумеруются с 1 для replace_fakes"}
+            "note": t("sm.fakes_note")}
 
 
 def game_filter_status():
@@ -164,7 +163,7 @@ def game_filter_status():
     path = os.path.join(ORIG_DIR, "utils", "game_filter.enabled")
     info = {"mode": "disabled", "tcp": "12", "udp": "12", "enabled": False, "file": path}
     if not os.path.isfile(path):
-        info["stdout"] = "game_filter.enabled отсутствует — игровой фильтр выключен"
+        info["stdout"] = t("sm.gf_absent")
         return {"ok": True, **info}
     try:
         with open(path, encoding="utf-8", errors="replace") as f:
@@ -203,17 +202,17 @@ def ipset_update():
         with urllib.request.urlopen(req, timeout=15) as r:
             data = r.read()
         if not data.strip():
-            return {"ok": False, "stdout": "", "stderr": "Пустой ответ от сервера — файл не обновлён"}
+            return {"ok": False, "stdout": "", "stderr": t("sm.ipset_empty")}
         if os.path.isfile(dest):
             import shutil
             shutil.copy2(dest, dest + ".bak")
         with open(dest, "wb") as f:
             f.write(data)
         n_lines = data.count(b"\n")
-        return {"ok": True, "stdout": f"ipset-all.txt обновлён: {len(data)} байт, {n_lines} строк",
+        return {"ok": True, "stdout": t("sm.ipset_updated", b=len(data), n=n_lines),
                 "stderr": ""}
     except Exception as e:
-        return {"ok": False, "stdout": "", "stderr": f"Не удалось обновить ipset: {e}"}
+        return {"ok": False, "stdout": "", "stderr": t("sm.ipset_update_fail", e=e)}
 
 def load_user_lists():
     try:
@@ -250,8 +249,7 @@ def is_admin():
 def admin_use():
     """Проверка прав и внешних команд (как :admin в service.bat)."""
     if not is_admin():
-        return {"ok": False, "service": "Нет прав администратора — запусти от имени администратора "
-                                        "(sc/netsh будут падать)", "msg": ""}
+        return {"ok": False, "service": t("sm.no_admin"), "msg": ""}
     cmds = ["chcp", "find", "findstr", "netsh"]
     missing = [c for c in cmds if subprocess.run(["where", c], capture_output=True,
                                                  creationflags=0x08000000).returncode != 0]
@@ -265,7 +263,7 @@ def check_updates():
     import re, urllib.request
     enabled_path = os.path.join(ORIG_DIR, "utils", "check_updates.enabled")
     if not os.path.exists(enabled_path):
-        return {"ok": True, "stdout": "Проверка обновлений отключена (нет utils/check_updates.enabled)",
+        return {"ok": True, "stdout": t("sm.updates_disabled"),
                 "stderr": "", "enabled": False}
     local = None
     try:
@@ -276,7 +274,7 @@ def check_updates():
     except OSError:
         pass
     if not local:
-        return {"ok": False, "stdout": "", "stderr": "Не удалось прочитать LOCAL_VERSION из service.bat"}
+        return {"ok": False, "stdout": "", "stderr": t("sm.ver_unreadable")}
     url = ("https://raw.githubusercontent.com/Flowseal/zapret-discord-youtube/"
            "main/.service/version.txt")
     try:
@@ -285,13 +283,12 @@ def check_updates():
             remote = r.read().decode("utf-8", "replace").strip()
     except Exception as e:
         # Как в оригинале: не смогли проверить — это не ошибка работы zapret
-        return {"ok": True, "stdout": f"Локальная версия {local}; проверить GitHub не удалось ({e})",
+        return {"ok": True, "stdout": t("sm.ver_local_only", l=local, e=e),
                 "stderr": "", "local": local, "remote": None}
     if remote == local:
-        return {"ok": True, "stdout": f"Установлена последняя версия: {local}",
+        return {"ok": True, "stdout": t("sm.ver_latest", l=local),
                 "stderr": "", "local": local, "remote": remote, "update_available": False}
-    return {"ok": True, "stdout": f"Доступна новая версия: {remote} (локальная: {local}). "
-                                  f"https://github.com/Flowseal/zapret-discord-youtube/releases/latest",
+    return {"ok": True, "stdout": t("sm.ver_new", r=remote, l=local),
             "stderr": "", "local": local, "remote": remote, "update_available": True}
 
 
@@ -329,10 +326,10 @@ def update_hosts():
         return {"ok": False, "stdout": "", "stderr": str(e)}
     yt = [ln for ln in content.splitlines()
           if "youtube.com" in ln.lower() or "youtu.be" in ln.lower()]
-    return {"ok": True, "stdout": f"hosts: {len(content.splitlines())} строк, "
-                                  f"записей youtube/youtu.be: {len(yt)}",
+    return {"ok": True, "stdout": t("sm.hosts_summary", n=len(content.splitlines()),
+                                    y=len(yt)),
             "stderr": "", "youtube_entries": yt[:10],
-            "note": "Записи youtube в hosts могут мешать — при необходимости удали их вручную"}
+            "note": t("sm.hosts_note")}
 
 def hidden_cmd(cmd_list, cwd=ORIG_DIR, timeout=30):
     try:
@@ -383,10 +380,9 @@ def restore_payloads(dest_dir=None, source_dir=None):
     dest = dest_dir or BIN_DIR
     src = source_dir or find_payload_source()
     if not src:
-        return {"ok": False, "stdout": "", "stderr": "Источник *.bin не найден. "
-                                                     "Задай ZAPRET_PAYLOADS_DIR или проверь архив версий."}
+        return {"ok": False, "stdout": "", "stderr": t("sm.payload_src_missing")}
     if os.path.abspath(src) == os.path.abspath(dest):
-        return {"ok": False, "stdout": "", "stderr": "Источник и назначение совпадают — нечего копировать."}
+        return {"ok": False, "stdout": "", "stderr": t("sm.payload_src_eq_dest")}
     try:
         os.makedirs(dest, exist_ok=True)
         copied, skipped = [], []
@@ -404,7 +400,7 @@ def restore_payloads(dest_dir=None, source_dir=None):
     pl = payloads_status(dest)
     return {"ok": pl["ok"], "source": src, "dest": dest,
             "copied": copied, "skipped": skipped,
-            "stdout": f"Скопировано {len(copied)}, пропущено (уже были) {len(skipped)}. {pl['stdout']}",
+            "stdout": t("sm.payload_copied", c=len(copied), s=len(skipped), status=pl['stdout']),
             "stderr": pl.get("stderr", ""), "payloads": pl}
 
 
@@ -436,7 +432,7 @@ def parse_strategy_args(strategy_id):
     Понимает продолжения строк через ^, кавычки и переменные %BIN%/%LISTS%/%GameFilter*%."""
     bat = os.path.join(ORIG_DIR, strategy_id + ".bat")
     if not os.path.isfile(bat):
-        return None, f"Файл стратегии не найден: {bat}"
+        return None, t("sm.strategy_not_found", p=bat)
     try:
         with open(bat, encoding="utf-8", errors="replace") as f:
             text = f.read()
@@ -472,7 +468,7 @@ def parse_strategy_args(strategy_id):
                          ("%~dp0", ORIG_DIR.rstrip("\\") + "\\")]:
             args_str = args_str.replace(var, val)
         return shlex.split(args_str, posix=False), None
-    return None, f"В {strategy_id}.bat не найдена строка запуска winws.exe"
+    return None, t("sm.strategy_no_winws", s=strategy_id)
 
 def apply_strategy(strategy_id, restart=True):
     """Применяет стратегию к службе zapret: пересоздаёт binPath (exeName+exeArgs)
@@ -482,8 +478,7 @@ def apply_strategy(strategy_id, restart=True):
         return {"ok": False, "service": err, "strategy": strategy_id}
     if not is_admin():
         return {"ok": False, "strategy": strategy_id,
-                "service": "Нет прав администратора — перезапусти приложение от администратора "
-                           "(кнопка «Admin») и повтори"}
+                "service": t("sm.apply_no_admin")}
     exe = os.path.join(BIN_DIR, "winws.exe")
     exe_args = " ".join(f'"{a}"' if (" " in a and not (a.startswith('"') and a.endswith('"'))) else a
                         for a in args)
@@ -512,7 +507,7 @@ def apply_strategy(strategy_id, restart=True):
         started = ""
         if restart:
             win32serviceutil.StartService(SERVICE_NAME)
-            started = ", служба запущена"
+            started = t("sm.service_started_suffix")
         # Запоминаем выбранную стратегию для отображения в статусе
         try:
             with open(os.path.join(os.path.dirname(os.path.abspath(__file__)), ".strategy"), "w",
@@ -521,7 +516,7 @@ def apply_strategy(strategy_id, restart=True):
         except OSError:
             pass
         return {"ok": True, "strategy": strategy_id, "args_count": len(args),
-                "service": f"Стратегия {strategy_id} применена ({len(args)} аргументов){started}"}
+                "service": t("sm.strategy_applied", s=strategy_id, n=len(args), started=started)}
     except Exception as e:
         return {"ok": False, "strategy": strategy_id, "service": str(e)}
 
@@ -571,7 +566,7 @@ def menu_status():
 def set_game_filter(mode, tcp="1024-65535", udp="1024-65535"):
     """Запись game_filter.enabled (как :save_game_filter_settings). mode ∈ all/tcp/udp/disabled."""
     if mode not in ("all", "tcp", "udp", "disabled"):
-        return {"ok": False, "service": f"Недопустимый режим: {mode}"}
+        return {"ok": False, "service": t("sm.bad_game_filter_mode", m=mode)}
     path = os.path.join(ORIG_DIR, "utils", "game_filter.enabled")
     try:
         os.makedirs(os.path.dirname(path), exist_ok=True)
@@ -620,8 +615,7 @@ def toggle_ipset(mode=None):
                 f.write("")
         else:  # loaded — вернуть из бэкапа
             if not os.path.isfile(backup):
-                return {"ok": False, "service": "Error: no backup to restore. "
-                                                "Update list from service menu first"}
+                return {"ok": False, "service": t("sm.ipset_no_backup")}
             if os.path.isfile(path):
                 os.remove(path)
             os.replace(backup, path)
@@ -656,7 +650,7 @@ def payloads_status(bin_dir=None):
     bin_dir = bin_dir or BIN_DIR
     if not os.path.isdir(bin_dir):
         return {"ok": False, "missing": [bin_dir], "total": 0,
-                "stderr": f"Каталог bin не найден: {bin_dir}"}
+                "stderr": t("sm.bin_dir_missing", d=bin_dir)}
     try:
         files = [f for f in os.listdir(bin_dir) if f.lower().endswith(".bin")]
     except OSError as e:
@@ -666,8 +660,8 @@ def payloads_status(bin_dir=None):
                 "quic_initial_www_google_com.bin", "tls_clienthello_www_google_com.bin"]
     missing = [r for r in required if r not in files]
     return {"ok": not missing, "total": len(files), "missing": missing,
-            "stdout": f"payload-файлов в bin: {len(files)}; отсутствует обязательных: {len(missing)}",
-            "stderr": ("Отсутствуют: " + ", ".join(missing)) if missing else ""}
+            "stdout": t("sm.payloads_summary", n=len(files), m=len(missing)),
+            "stderr": (t("sm.payloads_missing", list=", ".join(missing))) if missing else ""}
 
 # === ДИАГНОСТИКА (полный порт :service_diagnostics из service.bat) ===
 # Каждая проверка даёт уровень: ok (зелёный) / warn (жёлтый) / bad (красный) —
@@ -700,9 +694,10 @@ def _check(name, level, msg, url=""):
     return {"name": name, "level": level, "msg": msg, "url": url}
 
 def run_diagnostics():
-    """Все проверки из :service_diagnostics. Только чтение — авто-фиксы вынесены
-    в отдельные действия, чтобы диагностика ничего не меняла без спроса (в оригинале
-    TCP timestamps включались сами, а WinDivert удалялся — здесь это fix-функции)."""
+    """Все проверки из :service_diagnostics. Как в оригинале: выключенные TCP
+    timestamps диагностика включает сама (при правах админа); разрушающие фиксы
+    (удаление WinDivert и конфликтных служб) — отдельное действие remove_conflicts,
+    чтобы диагностика ничего не удаляла без спроса."""
     checks = []
     d = ORIG_DIR
     checks.append(_check("Path", "ok", f"Zapret is installed in: '{d}'"))
@@ -712,11 +707,9 @@ def run_diagnostics():
         r = subprocess.run(["sc", "query", "BFE"], capture_output=True, text=True,
                            errors="replace", creationflags=0x08000000, timeout=20)
         if "RUNNING" in (r.stdout or "").upper():
-            checks.append(_check("BFE", "ok", "Base Filtering Engine check passed"))
+            checks.append(_check("BFE", "ok", t("diag.bfe_ok")))
         else:
-            checks.append(_check("BFE", "bad",
-                                 "Base Filtering Engine is not running. "
-                                 "This service is required for zapret to work"))
+            checks.append(_check("BFE", "bad", t("diag.bfe_bad")))
     except Exception as e:
         checks.append(_check("BFE", "warn", f"BFE check failed: {e}"))
 
@@ -736,15 +729,13 @@ def run_diagnostics():
                 proxy_server = "?"
         winreg.CloseKey(k)
         if proxy_on == 1:
-            checks.append(_check("Proxy", "warn",
-                                 f"System proxy is enabled: {proxy_server}. "
-                                 "Make sure it's valid or disable it if you don't use a proxy"))
+            checks.append(_check("Proxy", "warn", t("diag.proxy_warn", p=proxy_server)))
         else:
-            checks.append(_check("Proxy", "ok", "Proxy check passed"))
+            checks.append(_check("Proxy", "ok", t("diag.proxy_ok")))
     except OSError:
-        checks.append(_check("Proxy", "ok", "Proxy check passed"))
+        checks.append(_check("Proxy", "ok", t("diag.proxy_ok")))
 
-    # TCP timestamps
+    # TCP timestamps — в оригинале: выключены -> авто-включение прямо в диагностике
     try:
         r = subprocess.run(["netsh", "interface", "tcp", "show", "global"],
                            capture_output=True, text=True, errors="replace",
@@ -752,91 +743,82 @@ def run_diagnostics():
         out = (r.stdout or "").lower()
         ts_line = next((l for l in out.splitlines() if "timestamp" in l), "")
         if "enabled" in ts_line and "dis" not in ts_line:
-            checks.append(_check("TCP timestamps", "ok", "TCP timestamps check passed"))
+            checks.append(_check("TCP timestamps", "ok", t("diag.ts_ok")))
         else:
-            checks.append(_check("TCP timestamps", "warn",
-                                 "TCP timestamps are disabled. Run «Fix TCP timestamps» "
-                                 "(как в оригинале — netsh set global timestamps=enabled)"))
+            if is_admin():
+                checks.append(_check("TCP timestamps", "warn", t("diag.ts_enabling")))
+                ok, msg = tcp_timestamps()
+                if ok:
+                    checks[-1] = _check("TCP timestamps", "ok", t("diag.ts_enabled"))
+                else:
+                    checks[-1] = _check("TCP timestamps", "bad", t("diag.ts_failed", e=msg))
+            else:
+                checks.append(_check("TCP timestamps", "warn", t("diag.ts_no_admin")))
     except Exception as e:
-        checks.append(_check("TCP timestamps", "warn", f"TCP check failed: {e}"))
+        checks.append(_check("TCP timestamps", "warn", t("diag.ts_check_failed", e=e)))
 
     # Adguard
     if _tasklist_running("AdguardSvc.exe"):
-        checks.append(_check("Adguard", "bad",
-                             "Adguard process found. Adguard may cause problems with Discord",
+        checks.append(_check("Adguard", "bad", t("diag.adguard_bad"),
                              "https://github.com/Flowseal/zapret-discord-youtube/issues/417"))
     else:
-        checks.append(_check("Adguard", "ok", "Adguard check passed"))
+        checks.append(_check("Adguard", "ok", t("diag.adguard_ok")))
 
     # Службы-конфликты: одним запросом sc query, как findstr в оригинале
     names = _sc_service_names()
     lower_names = [n.lower() for n in names]
 
     if any("killer" in n for n in lower_names):
-        checks.append(_check("Killer", "bad",
-                             "Killer services found. Killer conflicts with zapret",
+        checks.append(_check("Killer", "bad", t("diag.killer_bad"),
                              "https://github.com/Flowseal/zapret-discord-youtube/issues/2512#issuecomment-2821119513"))
     else:
-        checks.append(_check("Killer", "ok", "Killer check passed"))
+        checks.append(_check("Killer", "ok", t("diag.killer_ok")))
 
     if any("intel" in n and "connectivity" in n for n in lower_names):
-        checks.append(_check("Intel Connectivity", "bad",
-                             "Intel Connectivity Network Service found. It conflicts with zapret",
+        checks.append(_check("Intel Connectivity", "bad", t("diag.intel_bad"),
                              "https://github.com/ValdikSS/GoodbyeDPI/issues/541#issuecomment-2661670982"))
     else:
-        checks.append(_check("Intel Connectivity", "ok", "Intel Connectivity check passed"))
+        checks.append(_check("Intel Connectivity", "ok", t("diag.intel_ok")))
 
     if any(n in ("tracsrvwrapper", "epwd") for n in lower_names):
-        checks.append(_check("Check Point", "bad",
-                             "Check Point services found. Check Point conflicts with zapret. "
-                             "Try to uninstall Check Point"))
+        checks.append(_check("Check Point", "bad", t("diag.checkpoint_bad")))
     else:
-        checks.append(_check("Check Point", "ok", "Check Point check passed"))
+        checks.append(_check("Check Point", "ok", t("diag.checkpoint_ok")))
 
     if any("smartbyte" in n for n in lower_names):
-        checks.append(_check("SmartByte", "bad",
-                             "SmartByte services found. SmartByte conflicts with zapret. "
-                             "Try to uninstall or disable SmartByte through services.msc"))
+        checks.append(_check("SmartByte", "bad", t("diag.smartbyte_bad")))
     else:
-        checks.append(_check("SmartByte", "ok", "SmartByte check passed"))
+        checks.append(_check("SmartByte", "ok", t("diag.smartbyte_ok")))
 
     # Кириллица в пути
     if re.search(r"[\u0430-\u044f\u0410-\u042f\u0451\u0401]", d):
-        checks.append(_check("Cyrillic path", "warn",
-                             "The path where Zapret is installed contains Cyrillic characters. "
-                             "If bypass doesn't work, try to move Zapret to another directory, "
-                             "for example in C:\\zapret"))
+        checks.append(_check("Cyrillic path", "warn", t("diag.cyrillic_warn")))
     else:
-        checks.append(_check("Cyrillic path", "ok", "Cyrillic path check passed"))
+        checks.append(_check("Cyrillic path", "ok", t("diag.cyrillic_ok")))
 
     # OneDrive
     onedrive = os.environ.get("OneDrive", "")
     if onedrive and (d + "\\").lower().startswith((onedrive + "\\").lower()):
-        checks.append(_check("OneDrive", "bad",
-                             "Zapret is installed in a OneDrive folder. "
-                             "If bypass doesn't work, try to move Zapret to another directory, "
-                             "for example in C:\\zapret"))
+        checks.append(_check("OneDrive", "bad", t("diag.onedrive_bad")))
     else:
-        checks.append(_check("OneDrive", "ok", "OneDrive check passed"))
+        checks.append(_check("OneDrive", "ok", t("diag.onedrive_ok")))
 
     # WinDivert64.sys
     try:
         sys_files = [f for f in os.listdir(BIN_DIR) if f.lower().endswith(".sys")]
         if sys_files:
-            checks.append(_check("WinDivert", "ok", f"WinDivert driver present: {sys_files[0]}"))
+            checks.append(_check("WinDivert", "ok", t("diag.windivert_ok", f=sys_files[0])))
         else:
-            checks.append(_check("WinDivert", "bad", "WinDivert64.sys file NOT found in bin/"))
+            checks.append(_check("WinDivert", "bad", t("diag.windivert_bad")))
     except OSError:
-        checks.append(_check("WinDivert", "bad", "bin/ not found or unreadable"))
+        checks.append(_check("WinDivert", "bad", t("diag.windivert_bin_bad")))
 
     # VPN
     vpn = [n for n in names if "vpn" in n.lower() or n.lower().startswith("happ")]
     if vpn:
-        checks.append(_check("VPN", "warn",
-                             f"VPN services found: {', '.join(vpn)}. Some VPNs can conflict "
-                             "with zapret. Make sure that all VPNs are disabled"))
+        checks.append(_check("VPN", "warn", t("diag.vpn_warn", v=", ".join(vpn))))
     else:
-        checks.append(_check("VPN", "ok", "VPN check passed"))
+        checks.append(_check("VPN", "ok", t("diag.vpn_ok")))
 
     # Secure DNS (DoH) — реестр Dnscache\InterfaceSpecificParameters
     doh = 0
@@ -880,11 +862,9 @@ def run_diagnostics():
     except Exception:
         doh = 0
     if doh:
-        checks.append(_check("Secure DNS", "ok", "Secure DNS check passed"))
+        checks.append(_check("Secure DNS", "ok", t("diag.dns_ok")))
     else:
-        checks.append(_check("Secure DNS", "warn",
-                             "Make sure you have configured secure DNS in a browser with "
-                             "some non-default DNS service provider"))
+        checks.append(_check("Secure DNS", "warn", t("diag.dns_warn")))
 
     # Hosts file — youtube
     hosts = os.path.join(os.environ.get("SystemRoot", r"C:\Windows"),
@@ -893,48 +873,40 @@ def run_diagnostics():
         with open(hosts, encoding="utf-8", errors="replace") as f:
             hdata = f.read().lower()
         if "youtube.com" in hdata or "youtu.be" in hdata:
-            checks.append(_check("Hosts file", "warn",
-                                 "Your hosts file contains entries for youtube.com or youtu.be. "
-                                 "This may cause problems with YouTube access"))
+            checks.append(_check("Hosts file", "warn", t("diag.hosts_bad")))
         else:
-            checks.append(_check("Hosts file", "ok", "Hosts file check passed"))
+            checks.append(_check("Hosts file", "ok", t("diag.hosts_ok")))
     except OSError:
-        checks.append(_check("Hosts file", "ok", "Hosts file check passed"))
+        checks.append(_check("Hosts file", "ok", t("diag.hosts_ok")))
 
     # WinDivert конфликт: winws не запущен, но служба WinDivert активна
     windivert = [n for n in lower_names if n == "windivert"]
     if windivert and not winws_is_running():
-        checks.append(_check("WinDivert conflict", "bad",
-                             "winws.exe is not running but WinDivert service is active. "
-                             "Press «Remove conflicts» to delete it"))
+        checks.append(_check("WinDivert conflict", "bad", t("diag.wd_conflict_bad")))
     else:
-        checks.append(_check("WinDivert conflict", "ok", "WinDivert conflict check passed"))
+        checks.append(_check("WinDivert conflict", "ok", t("diag.wd_conflict_ok")))
 
     # Конфликтные обходы
     conflicting = ["goodbyedpi", "discordfix_zapret", "winws1", "winws2"]
     found = [n for n in conflicting if n in lower_names]
     if found:
         checks.append(_check("Conflicting bypasses", "bad",
-                             f"Conflicting bypass services found: {' '.join(found)}. "
-                             "Press «Remove conflicts» to remove them"))
+                             t("diag.conflicts_bad", c=" ".join(found))))
     else:
-        checks.append(_check("Conflicting bypasses", "ok", "No conflicting bypasses found"))
+        checks.append(_check("Conflicting bypasses", "ok", t("diag.conflicts_ok")))
 
     # Discord installations (в оригинале — вопрос про очистку кэша)
     ad = os.environ.get("APPDATA", "")
     discs = [n for n in ("discord", "discordptb", "discordcanary", "discorddevelopment")
              if ad and os.path.isdir(os.path.join(ad, n))]
     if discs:
-        checks.append(_check("Discord", "warn",
-                             f"Discord found ({', '.join(discs)}). "
-                             "Press «Clear Discord cache» to clean it (как в оригинале)"))
+        checks.append(_check("Discord", "warn", t("diag.discord_warn", d=", ".join(discs))))
     else:
-        checks.append(_check("Discord", "ok", "Discord installations were not found"))
+        checks.append(_check("Discord", "ok", t("diag.discord_ok")))
 
     bad = [c for c in checks if c["level"] == "bad"]
     warns = [c for c in checks if c["level"] == "warn"]
-    summary = (f"Диагностика: {len(checks)} проверок, "
-               f"ошибок {len(bad)}, предупреждений {len(warns)}")
+    summary = t("diag.summary", n=len(checks), b=len(bad), w=len(warns))
     return {"ok": not bad, "checks": checks, "service": summary,
             "counts": {"ok": len([c for c in checks if c["level"] == "ok"]),
                        "warn": len(warns), "bad": len(bad)}}
@@ -944,13 +916,13 @@ def remove_conflicts():
     обходов (GoodbyeDPI/discordfix_zapret/winws1/winws2). В оригинале — после
     подтверждения Y/N, здесь это отдельное действие."""
     if not is_admin():
-        return {"ok": False, "service": "Нет прав администратора — нужны для netsh/sc delete"}
+        return {"ok": False, "service": t("sm.conflicts_no_admin")}
     actions = []
     ok_all = True
 
     # TCP timestamps
     ok, msg = tcp_timestamps()
-    actions.append(f"TCP timestamps: {'включены' if ok else 'FAILED: ' + msg}")
+    actions.append(f"TCP timestamps: {t('sm.timestamps_enabled') if ok else t('sm.timestamps_failed', e=msg)}")
     ok_all &= ok
 
     # WinDivert + конфликтные обходы
@@ -968,7 +940,7 @@ def remove_conflicts():
             actions.append(f"[X] Failed to remove: {svc}")
             ok_all = False
     if not targets:
-        actions.append("Конфликтных служб нет — удалять нечего")
+        actions.append(t("sm.no_conflicts"))
     return {"ok": ok_all, "service": " | ".join(actions), "actions": actions}
 
 # === ТЕСТЫ (порт :run_tests -> utils\test zapret.ps1) ===
@@ -977,21 +949,20 @@ def remove_conflicts():
 # строки вывода отдаются колбэку on_line для живого показа в UI.
 
 def tests_prerequisites():
-    """Пре-чеки test zapret.ps1 — те же условия, но заранее и на русском."""
+    """Пре-чеки test zapret.ps1 — те же условия, но заранее."""
     problems = []
     if not is_admin():
-        problems.append("Run as Administrator to execute tests (нужны права админа)")
+        problems.append(t("tests.need_admin"))
     if not shutil.which("curl"):
-        problems.append("curl.exe not found — install curl or add it to PATH")
+        problems.append(t("tests.need_curl"))
     try:
         win32serviceutil.QueryServiceStatus(SERVICE_NAME)
-        problems.append("Windows service 'zapret' is installed — remove the service before "
-                        "running tests (как в оригинале: Remove Services -> Run Tests)")
+        problems.append(t("tests.service_installed"))
     except Exception:
         pass  # службы нет — это и есть требуемое состояние
     ps1 = os.path.join(ORIG_DIR, "utils", "test zapret.ps1")
     if not os.path.isfile(ps1):
-        problems.append(f"Not found: {ps1}")
+        problems.append(t("tests.script_missing", p=ps1))
     return problems
 
 def _latest_test_result():
@@ -1011,7 +982,7 @@ def run_tests(on_line=None, test_type=1, mode=1, selection=None, timeout=1800):
     on_line(str) — колбэк на каждую строку вывода (живой прогресс в UI)."""
     problems = tests_prerequisites()
     if problems:
-        return {"ok": False, "service": "Тесты не запущены: " + " | ".join(problems),
+        return {"ok": False, "service": t("tests.not_started", p=" | ".join(problems)),
                 "problems": problems}
     ps1 = os.path.join(ORIG_DIR, "utils", "test zapret.ps1")
     started = time.time()
@@ -1023,7 +994,7 @@ def run_tests(on_line=None, test_type=1, mode=1, selection=None, timeout=1800):
             stderr=subprocess.STDOUT, text=True, errors="replace",
             creationflags=0x08000000)
     except Exception as e:
-        return {"ok": False, "service": f"Не удалось запустить PowerShell: {e}"}
+        return {"ok": False, "service": t("tests.ps_fail", e=e)}
     # Ответы на Read-Host скрипта: тип теста, режим; при Selected — ещё и номер конфига.
     # Пишем сразу — буфер stdin сохранится до чтения скриптом.
     answers = f"{test_type}\n{mode}\n"
@@ -1039,7 +1010,7 @@ def run_tests(on_line=None, test_type=1, mode=1, selection=None, timeout=1800):
         for raw in p.stdout:
             if time.time() > deadline:
                 p.kill()
-                lines.append("[X] Таймаут тестов — процесс остановлен")
+                lines.append(t("tests.timeout"))
                 break
             line = raw.rstrip("\r\n")
             lines.append(line)
@@ -1066,13 +1037,13 @@ def run_tests(on_line=None, test_type=1, mode=1, selection=None, timeout=1800):
                 rdata = f.read()
             best = next((l.strip() for l in rdata.splitlines()
                          if l.strip().startswith("Best strategy:")), "")
-            tail = f" | {best or 'результаты сохранены'} ({os.path.basename(res_file)})"
+            tail = f" | {best or t('tests.results_saved')} ({os.path.basename(res_file)})"
         except OSError:
             pass
     joined = "\n".join(lines)
     has_error = "[ERROR]" in joined
-    summary = (f"Тесты завершены за {int(time.time() - started)} с{tail}"
-               if not has_error else "Тесты прерваны с ошибкой — см. вывод")
+    summary = (t("tests.done", t=int(time.time() - started), tail=tail)
+               if not has_error else t("tests.aborted"))
     return {"ok": not has_error, "service": summary, "stdout": lines[-60:],
             "results_file": res_file}
 
@@ -1100,8 +1071,8 @@ def run_service_action(action="status_zapret", arg="", **kwargs):
     if action == "tests_prereq" or action == "tests_precheck":
         probs = tests_prerequisites()
         return {"ok": not probs, "problems": probs,
-                "service": "Условия выполнены — можно запускать" if not probs
-                else "Тесты не запустятся: " + " | ".join(probs)}
+                "service": t("tests.prereq_ok") if not probs
+                else t("tests.wont_start", p=" | ".join(probs))}
     if action == "run_tests" or action == "test":
         return run_tests(on_line=kwargs.get("on_line"),
                          test_type=kwargs.get("test_type", 1),
@@ -1141,6 +1112,6 @@ def run_service_action(action="status_zapret", arg="", **kwargs):
         return apply_strategy(kwargs.get("strategy") or arg)
     if action == "relaunch_admin":
         ok = relaunch_as_admin()
-        return {"ok": ok, "service": "Перезапуск с правами администратора" if ok
-                else "Не удалось запустить с повышением прав"}
+        return {"ok": ok, "service": t("sm.relaunch_ok") if ok
+                else t("sm.relaunch_fail")}
     return {"ok": False, "service": f"Unknown action: {action}"}

@@ -4,6 +4,8 @@
 import sys, os, threading, time
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import service_manager
+import i18n
+from i18n import t
 
 try:
     import tkinter as tk
@@ -33,7 +35,7 @@ COLORS = {
 class ZapretApp:
     def __init__(self):
         self.root = tk.Tk()
-        self.root.title("Zapret — DPI Bypass")
+        self.root.title(t("ui.tk_root_title"))
         self.root.geometry("760x580")
         self.root.minsize(600, 480)
         self.root.configure(bg=COLORS["bg_main"])
@@ -49,12 +51,20 @@ class ZapretApp:
         header.pack(fill="x", padx=0, pady=0)
         header.pack_propagate(False)
         tk.Label(header, text="Zapret", font=("Segoe UI", 26, "bold"), fg=COLORS["text_primary"], bg=COLORS["bg_header"]).pack(side="left", padx=20, pady=14)
+        # Переключатель языка ru/en (как в вебе и PySide — выбор сохраняется)
+        lang_btn = tk.Button(header, text=i18n.LANG.upper(), command=self._switch_lang,
+                             bg=COLORS["button_bg"], fg=COLORS["text_primary"],
+                             activebackground=COLORS["button_bg_hover"],
+                             font=("Segoe UI", 9, "bold"), width=4,
+                             relief="flat", bd=1, highlightthickness=1,
+                             highlightbackground=COLORS["border"], highlightcolor=COLORS["border_hover"])
+        lang_btn.pack(side="left", padx=(0, 14), pady=16)
         # Status pill
         status_pill_frame = tk.Frame(header, bg=COLORS["bg_main"])
         status_pill_frame.pack(side="right", padx=20, pady=16)
         self.dot = tk.Canvas(status_pill_frame, width=14, height=14, bg=COLORS["bg_main"], highlightthickness=0)
         self.dot.pack(side="left", padx=(0, 8))
-        self.status_text = tk.Label(status_pill_frame, text="Неизвестно", font=("Segoe UI", 10, "bold"), fg=COLORS["text_secondary"], bg=COLORS["bg_main"])
+        self.status_text = tk.Label(status_pill_frame, text=t("ui.status_unknown"), font=("Segoe UI", 10, "bold"), fg=COLORS["text_secondary"], bg=COLORS["bg_main"])
         self.status_text.pack(side="left")
         self.payload_warn = tk.Label(status_pill_frame, text="", font=("Segoe UI", 9, "bold"),
                                      fg=COLORS["danger"], bg=COLORS["bg_main"], cursor="hand2")
@@ -66,19 +76,19 @@ class ZapretApp:
         content.pack(fill="both", expand=True, padx=16, pady=14)
 
         # Section label
-        tk.Label(content, text="УПРАВЛЕНИЕ СЕРВИСОМ (SCM — без .bat)", font=("Segoe UI", 9, "bold"), fg=COLORS["text_muted"], bg=COLORS["bg_card"]).pack(anchor="w", pady=(4, 10))
+        tk.Label(content, text=t("ui.sec_control_tk"), font=("Segoe UI", 9, "bold"), fg=COLORS["text_muted"], bg=COLORS["bg_card"]).pack(anchor="w", pady=(4, 10))
 
         # Стратегии: реальные .bat из каталога zapret (как в вебе)
         strat_frame = tk.Frame(content, bg=COLORS["bg_card"])
         strat_frame.pack(fill="x", pady=(0, 6))
-        tk.Label(strat_frame, text="Стратегия:", font=("Segoe UI", 9, "bold"),
+        tk.Label(strat_frame, text=t("ui.strategy"), font=("Segoe UI", 9, "bold"),
                  fg=COLORS["text_secondary"], bg=COLORS["bg_card"]).pack(side="left", padx=(2, 8))
         self.strat_var = tk.StringVar(value=service_manager.current_strategy() or "")
         self.strat_box = ttk.Combobox(strat_frame, textvariable=self.strat_var, state="readonly",
                                       font=("Segoe UI", 9), width=30)
         self.strat_box.pack(side="left", fill="x", expand=True)
         self.strat_box.bind("<<ComboboxSelected>>", lambda e: self.apply_strategy())
-        apply_btn = tk.Button(strat_frame, text="Применить", command=self.apply_strategy,
+        apply_btn = tk.Button(strat_frame, text=t("ui.apply"), command=self.apply_strategy,
                               bg=COLORS["button_bg"], fg=COLORS["text_primary"],
                               activebackground=COLORS["button_bg_hover"], font=("Segoe UI", 9, "bold"),
                               relief="flat", bd=1, highlightthickness=1,
@@ -94,20 +104,20 @@ class ZapretApp:
 
         # Buttons grid: 4 columns, clean rounded buttons
         btn_defs = [
-            ("Status", lambda: self.run_action("service_status")),
-            ("Admin (права)", lambda: self.run_action("relaunch_admin")),
-            ("Install Svc", lambda: self.run_action("service_install")),
-            ("Uninstall", lambda: self.run_action("service_remove")),
-            ("Start", lambda: self.run_action("start")),
-            ("Stop", lambda: self.run_action("stop")),
-            ("Diag", lambda: self.run_action("service_diagnostics")),
-            ("Test", lambda: self.run_action("test")),
-            ("Update", lambda: self.run_action("check_updates")),
-            ("GameFilter", lambda: self.run_action("load_game_filter")),
-            ("Clear Discord", lambda: self.run_action("clear_discord")),
-            ("List Fakes", lambda: self.show_fakes()),
-            ("Restore Payload", lambda: self.run_action("restore_payloads")),
-            ("IPSet Update", lambda: self.run_action("ipset_update")),
+            (t("ui.tk_status"), lambda: self.run_action("service_status")),
+            (t("ui.admin_rights"), lambda: self.run_action("relaunch_admin")),
+            (t("ui.tk_install"), lambda: self.run_action("service_install")),
+            (t("ui.tk_uninstall"), lambda: self.run_action("service_remove")),
+            (t("ui.tk_start"), lambda: self.run_action("start")),
+            (t("ui.tk_stop"), lambda: self.run_action("stop")),
+            (t("ui.tk_diag"), lambda: self.run_action("service_diagnostics")),
+            (t("ui.tk_test"), lambda: self.run_action("test")),
+            (t("ui.tk_update"), lambda: self.run_action("check_updates")),
+            (t("ui.tk_gamefilter"), lambda: self.run_action("load_game_filter")),
+            (t("ui.tk_discord"), lambda: self.run_action("clear_discord")),
+            (t("ui.tk_fakes"), lambda: self.show_fakes()),
+            (t("ui.tk_restore"), lambda: self.run_action("restore_payloads")),
+            (t("ui.tk_ipset"), lambda: self.run_action("ipset_update")),
         ]
         grid_frame = tk.Frame(content, bg=COLORS["bg_card"])
         grid_frame.pack(fill="x", pady=2)
@@ -125,22 +135,28 @@ class ZapretApp:
             grid_frame.grid_columnconfigure(c, weight=1, minsize=140)
 
         # Output area
-        tk.Label(content, text="ВЫВОД", font=("Segoe UI", 9, "bold"), fg=COLORS["text_muted"], bg=COLORS["bg_card"]).pack(anchor="w", pady=(14, 4))
+        tk.Label(content, text=t("ui.output"), font=("Segoe UI", 9, "bold"), fg=COLORS["text_muted"], bg=COLORS["bg_card"]).pack(anchor="w", pady=(14, 4))
         self.output = tk.Text(content, bg="#12121a", fg="#e8e8e8",
                               font=("Consolas", 9), height=12,
                               wrap="word", bd=0, highlightthickness=1,
                               highlightbackground=COLORS["border"], highlightcolor=COLORS["border_hover"])
         self.output.pack(fill="both", expand=True, pady=(0, 8))
-        self.output.insert("end", "Готово. Нажми любую кнопку.\nВсе функции работают через service_manager (без .bat).\n")
+        self.output.insert("end", t("ui.tk_ready") + "\n")
         self.output.config(state="disabled")
 
         # Footer
-        foot = tk.Label(content, text="zapret-simple — native SCM (pywin32) | без service.bat | Python 3.15+", bg=COLORS["bg_card"], fg=COLORS["text_muted"], font=("Segoe UI", 7))
+        foot = tk.Label(content, text=t("ui.footer_tk"), bg=COLORS["bg_card"], fg=COLORS["text_muted"], font=("Segoe UI", 7))
         foot.pack(side="bottom", pady=6)
 
         # Auto-refresh status
         self.refresh()
         self.root.mainloop()
+
+    def _switch_lang(self):
+        """Переключатель ru/en: сохраняет выбор и пересоздаёт окно."""
+        i18n.save("en" if i18n.LANG == "ru" else "ru")
+        self._restart = True
+        self.root.destroy()
 
     def refresh(self):
         """Обновление статуса + планирование следующего опроса (ровно один цикл)."""
@@ -166,7 +182,7 @@ class ZapretApp:
             if pl["ok"]:
                 self.payload_warn.config(text="")
             else:
-                self.payload_warn.config(text=f"⚠ нет .bin: {len(pl['missing'])} — клик для восстановления")
+                self.payload_warn.config(text=t("ui.payload_warn_tk", n=len(pl['missing'])))
         except Exception:
             self.payload_warn.config(text="")
 
@@ -182,7 +198,7 @@ class ZapretApp:
         r = service_manager.run_service_action("list_fakes")
         items = r.get("stdout") or []
         if not items:
-            self.append_output("[ERR] Нет .bin файлов в bin/")
+            self.append_output(t("ui.no_bins"))
             return
         lines = []
         num = 0
@@ -193,17 +209,16 @@ class ZapretApp:
                 lines.append(f"  {num}. {f['name']}  {f['sha256']}{mark}")
             else:
                 lines.append(f"  *  {f['name']}  {f['sha256']}{mark}")
-        self.append_output("Fake-файлы:\n" + "\n".join(lines))
+        self.append_output(t("ui.fakes_list") + "\n" + "\n".join(lines))
         choice = tkinter.simpledialog.askstring(
-            "Replace Active Fake",
-            "Введите: тип (1=Discord UDP, 2=GameFilter UDP) и номер fake-файла\n"
-            "Например: 1 3\n\n" + "\n".join(lines),
+            t("ui.fake_dialog_title"),
+            t("ui.tk_fake_prompt") + "\n\n" + "\n".join(lines),
             parent=self.root)
         if not choice:
             return
         parts = choice.split()
         if len(parts) != 2:
-            self.append_output("[ERR] Формат: <тип> <номер>, например 1 3")
+            self.append_output(t("ui.tk_format_err"))
             return
         rr = service_manager.run_service_action("replace_active_fakes",
                                                 fake_type=parts[0], number=parts[1])
@@ -213,13 +228,12 @@ class ZapretApp:
         """Применение выбранной стратегии в фоне (перезапуск службы — долго, UI не должен виснуть)."""
         sid = self.strat_var.get()
         if not sid:
-            self.append_output("[ERR] Стратегия не выбрана")
+            self.append_output(t("ui.tk_strategy_err"))
             return
         if not service_manager.is_admin():
-            self.append_output("[ERR] Применение стратегии требует прав администратора — "
-                               "нажми «Admin (права)» и повтори")
+            self.append_output(t("ui.tk_need_admin"))
             return
-        self.append_output(f">>> Применение стратегии: {sid} (служба будет перезапущена)...")
+        self.append_output(t("ui.tk_applying", s=sid))
         threading.Thread(target=self._apply_strategy_worker, args=(sid,), daemon=True).start()
 
     def _apply_strategy_worker(self, sid):
@@ -230,7 +244,7 @@ class ZapretApp:
         self.root.after(0, self.update_status)
 
     def run_action(self, action):
-        self.append_output(f">>> Выполняется: {action}")
+        self.append_output(t("ui.tk_running", a=action))
         # В фоне: sc/netsh/ipset могут занимать секунды — не блокируем UI
         threading.Thread(target=self._run_action_worker, args=(action,), daemon=True).start()
 
@@ -259,11 +273,15 @@ class ZapretApp:
             else:
                 result = str(r)[:200]
         except Exception as e:
-            result = f"[ОШИБКА] {str(e)[:200]}"
+            result = f"{t('ui.tk_error')} {str(e)[:200]}"
         # Вывод — только в главном потоке mainloop
         self.root.after(0, lambda: [self.append_output(x) for x in extra])
         self.root.after(0, lambda: self.append_output(result))
         self.root.after(0, self.update_status)  # не refresh() — иначе каждый клик добавлял бы новый таймер
 
 if __name__ == "__main__":
-    ZapretApp()
+    # Пересоздание окна после смены языка (i18n.save -> destroy -> новый цикл)
+    while True:
+        app = ZapretApp()
+        if not getattr(app, "_restart", False):
+            break
