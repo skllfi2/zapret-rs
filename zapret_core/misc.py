@@ -10,13 +10,13 @@ from .lists import load_user_lists
 from .paths import ORIG_DIR
 
 
-def is_admin():
+def is_admin() -> bool:
     try:
         return bool(ctypes.windll.shell32.IsUserAnAdmin())
     except Exception:
         return False
 
-def admin_use():
+def admin_use() -> dict:
     """Проверка прав и внешних команд (как :admin в service.bat)."""
     if not is_admin():
         return {"ok": False, "service": t("sm.no_admin"), "msg": ""}
@@ -28,7 +28,7 @@ def admin_use():
     load_user_lists()
     return {"ok": True, "service": "Admin rights OK, lists loaded", "msg": ""}
 
-def clear_discord():
+def clear_discord() -> dict:
     """Остановка Discord + удаление кэша (доступно из любого UI)."""
     import shutil
     killed = []
@@ -47,7 +47,7 @@ def clear_discord():
     return {"ok": True, "stdout": f"killed={killed or 'none'}, cache_removed={len(removed)}",
             "stderr": ""}
 
-def hidden_cmd(cmd_list, cwd=ORIG_DIR, timeout=30):
+def hidden_cmd(cmd_list: list, cwd: str = ORIG_DIR, timeout: int = 30) -> dict:
     try:
         res = subprocess.run(cmd_list, cwd=cwd, capture_output=True, text=True, errors="replace",
                              timeout=timeout, creationflags=0x08000000, shell=False)
@@ -55,7 +55,7 @@ def hidden_cmd(cmd_list, cwd=ORIG_DIR, timeout=30):
     except Exception as e:
         return {"ok": False, "stdout": "", "stderr": str(e)}
 
-def relaunch_as_admin(extra_args=()):
+def relaunch_as_admin(extra_args=()) -> bool:
     """Перезапуск текущего приложения с повышением прав (UAC).
     args = argv целиком (включая имя скрипта), иначе запустится пустой python;
     у frozen-exe путь к программе сам является программой — его не дублируем."""

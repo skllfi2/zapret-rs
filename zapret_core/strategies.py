@@ -16,7 +16,7 @@ from .settings import game_filter_status
 
 # === СТРАТЕГИИ: разбор .bat и применение к службе (как :service_install в service.bat) ===
 
-def list_strategies():
+def list_strategies() -> list[str]:
     """Реальные стратегии = .bat файлы каталога zapret (кроме service*)."""
     try:
         return [os.path.splitext(f)[0] for f in sorted(os.listdir(ORIG_DIR))
@@ -24,7 +24,7 @@ def list_strategies():
     except OSError:
         return []
 
-def _game_filter_ranges():
+def _game_filter_ranges() -> tuple[str | None, str | None]:
     """Эффективные диапазоны как в :game_switch_status: для выключенного направления — 12
     (заглушка: winws получает порт, на котором трафика нет)."""
     gf = game_filter_status()
@@ -37,7 +37,7 @@ def _game_filter_ranges():
         return "12", udp
     return "12", "12"
 
-def parse_strategy_args(strategy_id):
+def parse_strategy_args(strategy_id: str) -> tuple[list[str] | None, str | None]:
     """Разбирает выбранный .bat и возвращает список аргументов winws.exe.
     Понимает продолжения строк через ^, кавычки и переменные %BIN%/%LISTS%/%GameFilter*%."""
     bat = os.path.join(ORIG_DIR, strategy_id + ".bat")
@@ -80,7 +80,7 @@ def parse_strategy_args(strategy_id):
         return shlex.split(args_str, posix=False), None
     return None, t("sm.strategy_no_winws", s=strategy_id)
 
-def apply_strategy(strategy_id, restart=True):
+def apply_strategy(strategy_id: str, restart: bool = True) -> dict:
     """Применяет стратегию к службе zapret: пересоздаёт binPath (exeName+exeArgs)
     и перезапускает службу. Требует прав администратора."""
     args, err = parse_strategy_args(strategy_id)
@@ -129,7 +129,7 @@ def apply_strategy(strategy_id, restart=True):
     except Exception as e:
         return {"ok": False, "strategy": strategy_id, "service": str(e)}
 
-def current_strategy():
+def current_strategy() -> str | None:
     """Последняя применённая стратегия (файл .strategy рядом с приложением)."""
     p = STRATEGY_FILE
     try:

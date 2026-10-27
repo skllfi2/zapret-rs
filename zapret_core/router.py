@@ -13,7 +13,7 @@ from .updates import check_updates
 from .winws import list_fakes, payloads_status, replace_fakes, restore_payloads, winws_is_running
 
 
-def run_service_action(action="status_zapret", arg="", **kwargs):
+def run_service_action(action: str = "status_zapret", arg: str = "", **kwargs) -> dict:
     """Основной маршрутизатор — заменяет service.bat полностью.
     kwargs пробрасываются в функцию (например, fake_type/number для replace_active_fakes)."""
     if action == "service_install":

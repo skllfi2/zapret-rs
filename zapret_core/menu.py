@@ -5,7 +5,7 @@ from .settings import check_updates_flag, game_filter_label, local_version
 from .strategies import current_strategy
 
 
-def menu_status():
+def menu_status() -> dict:
     """Все статусы шапки оригинального меню одним запросом."""
     return {"ok": True, "version": local_version(), "strategy": current_strategy(),
             "game_filter": game_filter_label(), "ipset": ipset_status(),

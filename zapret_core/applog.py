@@ -12,11 +12,11 @@ LOG_DIR = os.path.join(os.environ.get("LOCALAPPDATA", ""), "zapret-simple")
 LOG_FILE = os.path.join(LOG_DIR, "zapret.log")
 
 
-def log_path():
+def log_path() -> str:
     return LOG_FILE
 
 
-def log(msg):
+def log(msg: str) -> None:
     """Аппенд в лог с меткой времени. Никогда не бросает исключений."""
     try:
         os.makedirs(LOG_DIR, exist_ok=True)
@@ -27,12 +27,12 @@ def log(msg):
         pass
 
 
-def _short_error(exc_type, exc):
+def _short_error(exc_type: type, exc: BaseException) -> str:
     name = getattr(exc_type, "__name__", str(exc_type))
     return f"{name}: {exc}"
 
 
-def _show_dialog(exc_type, exc, tb_text):
+def _show_dialog(exc_type: type, exc: BaseException, tb_text: str) -> None:
     """Диалог с путём к логу — только если Qt уже жив и мы в главном потоке."""
     try:
         from PySide6.QtWidgets import QApplication, QMessageBox
@@ -52,7 +52,7 @@ def _show_dialog(exc_type, exc, tb_text):
         pass
 
 
-def _handle(exc_type, exc, tb):
+def _handle(exc_type: type, exc: BaseException, tb) -> None:
     tb_text = "".join(traceback.format_exception(exc_type, exc, tb))
     log(f"UNHANDLED {_short_error(exc_type, exc)}\n{tb_text.rstrip()}")
     if not getattr(sys, "frozen", False):
@@ -60,11 +60,11 @@ def _handle(exc_type, exc, tb):
     _show_dialog(exc_type, exc, tb_text)
 
 
-def install_excepthook():
+def install_excepthook() -> None:
     """sys.excepthook + threading.excepthook -> zapret.log. Безопасно вызывать дважды."""
     sys.excepthook = _handle
 
-    def _thread_hook(args):
+    def _thread_hook(args) -> None:
         exc = (args.exc_type, args.exc_value, args.exc_traceback)
         tb_text = "".join(traceback.format_exception(*exc))
         log(f"UNHANDLED (thread {getattr(args, 'thread', '?')})\n{tb_text.rstrip()}")

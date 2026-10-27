@@ -13,7 +13,7 @@ from .paths import BIN_DIR, ORIG_DIR
 from .winws import winws_is_running
 
 
-def tcp_timestamps():
+def tcp_timestamps() -> tuple[bool, str]:
     try:
         res = subprocess.run(["netsh", "int", "tcp", "set", "global", "timestamps=enabled"],
                              capture_output=True, text=True, errors="replace", creationflags=0x08000000)
@@ -25,7 +25,7 @@ def tcp_timestamps():
 # Каждая проверка даёт уровень: ok (зелёный) / warn (жёлтый) / bad (красный) —
 # ровно как PrintGreen/PrintYellow/PrintRed в оригинале.
 
-def _sc_service_names():
+def _sc_service_names() -> list[str]:
     """Список имён установленных служб (sc query) — как `sc query | findstr` в оригинале."""
     try:
         res = subprocess.run(["sc", "query"], capture_output=True, text=True,
@@ -39,7 +39,7 @@ def _sc_service_names():
     except Exception:
         return []
 
-def _tasklist_running(image):
+def _tasklist_running(image: str) -> bool:
     try:
         res = subprocess.run(["tasklist", "/FI", f"IMAGENAME eq {image}"],
                              capture_output=True, text=True, errors="replace",
@@ -48,10 +48,10 @@ def _tasklist_running(image):
     except Exception:
         return False
 
-def _check(name, level, msg, url=""):
+def _check(name: str, level: str, msg: str, url: str = "") -> dict:
     return {"name": name, "level": level, "msg": msg, "url": url}
 
-def run_diagnostics():
+def run_diagnostics() -> dict:
     """Все проверки из :service_diagnostics. Как в оригинале: выключенные TCP
     timestamps диагностика включает сама (при правах админа); разрушающие фиксы
     (удаление WinDivert и конфликтных служб) — отдельное действие remove_conflicts,
@@ -269,7 +269,7 @@ def run_diagnostics():
             "counts": {"ok": len([c for c in checks if c["level"] == "ok"]),
                        "warn": len(warns), "bad": len(bad)}}
 
-def remove_conflicts():
+def remove_conflicts() -> dict:
     """Авто-фиксы из оригинала: TCP timestamps + удаление WinDivert и конфликтных
     обходов (GoodbyeDPI/discordfix_zapret/winws1/winws2). В оригинале — после
     подтверждения Y/N, здесь это отдельное действие."""

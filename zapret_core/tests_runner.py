@@ -6,6 +6,7 @@ import os
 import shutil
 import subprocess
 import time
+from collections.abc import Callable
 
 import win32serviceutil
 
@@ -20,7 +21,7 @@ from .strategies import list_strategies
 # запуск того же скрипта, ответы на его Read-Host (тип теста, режим) пишутся в stdin,
 # строки вывода отдаются колбэку on_line для живого показа в UI.
 
-def tests_prerequisites():
+def tests_prerequisites() -> list[str]:
     """Пре-чеки test zapret.ps1 — те же условия, но заранее."""
     problems = []
     if not is_admin():
@@ -37,7 +38,7 @@ def tests_prerequisites():
         problems.append(t("tests.script_missing", p=ps1))
     return problems
 
-def _latest_test_result():
+def _latest_test_result() -> str | None:
     """Последний файл utils/test results/test_results_*.txt (там итог и Best strategy)."""
     d = os.path.join(ORIG_DIR, "utils", "test results")
     try:
@@ -47,7 +48,8 @@ def _latest_test_result():
     except OSError:
         return None
 
-def run_tests(on_line=None, test_type=1, mode=1, selection=None, timeout=1800):
+def run_tests(on_line: Callable | None = None, test_type: int = 1, mode: int = 1,
+              selection: list[str] | None = None, timeout: int = 1800) -> dict:
     """Запуск оригинального utils\test zapret.ps1.
     test_type: 1=Standard (HTTP/ping), 2=DPI checkers; mode: 1=All configs, 2=Selected;
     selection — номер конфига при mode=2 (третий Read-Host в оригинале).
@@ -119,7 +121,7 @@ def run_tests(on_line=None, test_type=1, mode=1, selection=None, timeout=1800):
     return {"ok": not has_error, "service": summary, "stdout": lines[-60:],
             "results_file": res_file}
 
-def best_strategy():
+def best_strategy() -> dict:
     """Лучшая стратегия из последнего файла результатов тестов (строка
     'Best strategy: X.bat'), приведённая к имени без расширения (как list_strategies)."""
     res_file = _latest_test_result()

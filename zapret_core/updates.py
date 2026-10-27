@@ -6,7 +6,7 @@ from i18n import t
 from .paths import ORIG_DIR
 
 
-def check_updates():
+def check_updates() -> dict:
     """Сравнение локальной версии (LOCAL_VERSION из service.bat) с GitHub (как :service_check_updates)."""
     import re
     import urllib.request

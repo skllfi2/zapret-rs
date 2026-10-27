@@ -8,7 +8,7 @@ from i18n import t
 from .paths import ORIG_DIR
 
 
-def game_filter_status():
+def game_filter_status() -> dict:
     """Чтение utils/game_filter.enabled (как :game_switch_status в service.bat)."""
     path = os.path.join(ORIG_DIR, "utils", "game_filter.enabled")
     info = {"mode": "disabled", "tcp": "12", "udp": "12", "enabled": False, "file": path}
@@ -46,7 +46,7 @@ def game_filter_status():
 
 # === МЕНЮ: версия и тумблеры (порт :menu/:ipset_switch/:check_updates_switch) ===
 
-def local_version():
+def local_version() -> str | None:
     """LOCAL_VERSION из service.bat (как в шапке оригинального меню)."""
     try:
         with open(os.path.join(ORIG_DIR, "service.bat"), encoding="utf-8", errors="replace") as f:
@@ -55,19 +55,19 @@ def local_version():
     except OSError:
         return None
 
-def check_updates_flag():
+def check_updates_flag() -> str:
     """Как :check_updates_switch_status — enabled/disabled по файлу-флагу."""
     return "enabled" if os.path.exists(os.path.join(ORIG_DIR, "utils", "check_updates.enabled")) \
         else "disabled"
 
-def game_filter_label():
+def game_filter_label() -> str:
     """Человекочитаемый статус игрового фильтра (как :game_switch_status в шапке меню)."""
     gf = game_filter_status()
     mode = gf.get("mode", "disabled")
     return {"all": "enabled (TCP and UDP)", "tcp": "enabled (TCP)",
             "udp": "enabled (UDP)"}.get(mode, "disabled")
 
-def set_game_filter(mode, tcp="1024-65535", udp="1024-65535"):
+def set_game_filter(mode: str, tcp: str = "1024-65535", udp: str = "1024-65535") -> dict:
     """Запись game_filter.enabled (как :save_game_filter_settings). mode ∈ all/tcp/udp/disabled."""
     if mode not in ("all", "tcp", "udp", "disabled"):
         return {"ok": False, "service": t("sm.bad_game_filter_mode", m=mode)}
@@ -81,7 +81,7 @@ def set_game_filter(mode, tcp="1024-65535", udp="1024-65535"):
     except OSError as e:
         return {"ok": False, "service": str(e)}
 
-def toggle_check_updates(enable=None):
+def toggle_check_updates(enable: bool | None = None) -> dict:
     """Вкл/выкл автопроверку обновлений (как :check_updates_switch — создать/удалить файл-флаг)."""
     path = os.path.join(ORIG_DIR, "utils", "check_updates.enabled")
     try:

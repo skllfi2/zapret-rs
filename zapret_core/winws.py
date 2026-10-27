@@ -8,7 +8,7 @@ from .paths import BIN_DIR
 
 # === winws.exe управление (заменяет service.bat вызовы) ===
 
-def winws_is_running():
+def winws_is_running() -> bool:
     try:
         # Без text=True: tasklist отдаёт OEM-кодировку (cp866 и т.п.),
         # декодирование в UTF-8 падало — проверяем байты напрямую.
@@ -18,7 +18,7 @@ def winws_is_running():
     except Exception:
         return False
 
-def replace_fakes(fake_type=None, number=None):
+def replace_fakes(fake_type=None, number=None) -> dict:
     """Замена ACTIVE_*.bin на выбранный fake из bin/ (как :replace_active_fakes в service.bat).
     fake_type: 1=Discord UDP, 2=GameFilter UDP; number — позиция в списке fakes (с 1)."""
     import hashlib
@@ -51,7 +51,7 @@ def replace_fakes(fake_type=None, number=None):
         return {"ok": False, "stdout": "", "stderr": str(e)}
 
 
-def list_fakes():
+def list_fakes() -> dict:
     """Список fake-файлов с хешами + текущие ACTIVE_* (для выбора в replace_fakes)."""
     import hashlib
     items = []
@@ -67,7 +67,7 @@ def list_fakes():
     return {"ok": True, "stdout": items,
             "note": t("sm.fakes_note")}
 
-def find_payload_source():
+def find_payload_source() -> str | None:
     """Ищем каталог с *.bin payload-файлами для восстановления.
     Порядок: ZAPRET_PAYLOADS_DIR -> самый свежий AppWatch/Versions/<app>/*/bin."""
     candidates = []
@@ -102,7 +102,7 @@ def find_payload_source():
     return None
 
 
-def restore_payloads(dest_dir=None, source_dir=None):
+def restore_payloads(dest_dir: str | None = None, source_dir: str | None = None) -> dict:
     """Восстановление *.bin в bin/ рабочей копии (не перезаписывает существующие).
     Нужно, если развёртывание скопировало bin не полностью: без .bin fake-стратегии
     winws молча не работают."""
@@ -133,7 +133,7 @@ def restore_payloads(dest_dir=None, source_dir=None):
             "stdout": t("sm.payload_copied", c=len(copied), s=len(skipped), status=pl['stdout']),
             "stderr": pl.get("stderr", ""), "payloads": pl}
 
-def payloads_status(bin_dir=None):
+def payloads_status(bin_dir: str | None = None) -> dict:
     """Проверка fake-payload файлов (*.bin), на которые ссылается winws.exe.
     В рабочей копии их может не быть (лежат в архиве версий) — тогда fake-стратегии не работают."""
     bin_dir = bin_dir or BIN_DIR

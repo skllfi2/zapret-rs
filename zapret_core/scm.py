@@ -10,7 +10,7 @@ from i18n import t
 from .paths import SERVICE_NAME, get_bin_path
 
 
-def install_service(exe_path=None):
+def install_service(exe_path: str | None = None) -> tuple[bool, str]:
     if exe_path is None:
         exe_path = get_bin_path()
     if not os.path.isfile(exe_path):
@@ -26,21 +26,21 @@ def install_service(exe_path=None):
     except Exception as e:
         return False, str(e)
 
-def uninstall_service():
+def uninstall_service() -> tuple[bool, str]:
     try:
         win32serviceutil.RemoveService(SERVICE_NAME)
         return True, "Service removed (SCM)"
     except Exception as e:
         return False, str(e)
 
-def start_service():
+def start_service() -> tuple[bool, str]:
     try:
         win32serviceutil.StartService(SERVICE_NAME)
         return True, "Service started"
     except Exception as e:
         return False, str(e)
 
-def stop_service():
+def stop_service() -> tuple[bool, str]:
     try:
         win32serviceutil.StopService(SERVICE_NAME)
         return True, "Service stopped"
@@ -59,7 +59,7 @@ SERVICE_STATES = {
     win32service.SERVICE_PAUSED: "Paused",
 }
 
-def query_status():
+def query_status() -> str:
     try:
         status = win32serviceutil.QueryServiceStatus(SERVICE_NAME)
         state = status[1]
@@ -67,11 +67,11 @@ def query_status():
     except Exception as e:
         return f"Not installed / error: {e}"
 
-def is_running():
+def is_running() -> bool:
     """Единственный источник правды «служба запущена?» — используем везде."""
     return query_status() == "Running"
 
-def set_autostart(enable=True):
+def set_autostart(enable: bool = True) -> tuple[bool, str]:
     try:
         cmd = ["sc", "config", SERVICE_NAME, "start=", "auto" if enable else "demand"]
         res = subprocess.run(cmd, capture_output=True, text=True, errors="replace", creationflags=0x08000000)

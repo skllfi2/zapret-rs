@@ -6,7 +6,7 @@ from i18n import t
 from .paths import LISTS_DIR
 
 
-def ipset_update():
+def ipset_update() -> dict:
     """Скачивание ipset-all.txt с GitHub (как :ipset_update в service.bat), с бэкапом."""
     import urllib.request
     url = ("https://raw.githubusercontent.com/Flowseal/zapret-discord-youtube/"
@@ -29,7 +29,7 @@ def ipset_update():
     except Exception as e:
         return {"ok": False, "stdout": "", "stderr": t("sm.ipset_update_fail", e=e)}
 
-def load_user_lists():
+def load_user_lists() -> dict:
     try:
         lists_path = LISTS_DIR
         if not os.path.exists(lists_path):
@@ -47,7 +47,7 @@ def load_user_lists():
     except Exception as e:
         return {"ok": False, "stdout": "", "stderr": str(e)}
 
-def update_hosts():
+def update_hosts() -> dict:
     """Диагностика hosts-файла (как :hosts_update / :service_diagnostics в оригинале:
     пункт меню 9 в оригинале пуст — сводим к полезной проверке)."""
     hosts = os.path.join(os.environ.get("SystemRoot", r"C:\Windows"),
@@ -66,7 +66,7 @@ def update_hosts():
             "stderr": "", "youtube_entries": yt[:10],
             "note": t("sm.hosts_note")}
 
-def ipset_status():
+def ipset_status() -> str:
     """Как :ipset_switch_status — any / none / loaded по содержимому ipset-all.txt."""
     path = os.path.join(LISTS_DIR, "ipset-all.txt")
     try:
@@ -79,7 +79,7 @@ def ipset_status():
         return "any"
     return "none" if any("203.0.113.113/32" in ln for ln in lines) else "loaded"
 
-def toggle_ipset(mode=None):
+def toggle_ipset(mode: str | None = None) -> dict:
     """Переключение ipset (как :ipset_switch): loaded→none→any→loaded с backup-файлом."""
     path = os.path.join(LISTS_DIR, "ipset-all.txt")
     backup = path + ".backup"

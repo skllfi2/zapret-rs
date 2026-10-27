@@ -5,7 +5,7 @@ import sys
 
 # === Автоопределение каталога zapret (без хардкода одной копии) ===
 # Порядок: переменная окружения ZAPRET_DIR -> рабочая копия AppWatch -> ~/Pictures.
-def _detect_orig_dir():
+def _detect_orig_dir() -> str:
     candidates = []
     env = os.environ.get("ZAPRET_DIR")
     if env:
@@ -24,7 +24,7 @@ LISTS_DIR = os.path.join(ORIG_DIR, "lists")
 SERVICE_NAME = "zapret"
 SERVICE_DISPLAY = "zapret"
 
-def get_bin_path():
+def get_bin_path() -> str:
     # Службу ставит оригинальный service.bat (см. install_service: .bat как binPath запрещён)
     return os.path.join(ORIG_DIR, "service.bat")
 
