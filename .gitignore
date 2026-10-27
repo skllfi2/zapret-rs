@@ -9,3 +9,8 @@ venv/
 dist/
 build/
 *.spec
+# артефакты проверок: coverage и mypy
+.coverage
+.coverage.*
+htmlcov/
+.mypy_cache/
