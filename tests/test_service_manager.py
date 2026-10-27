@@ -15,7 +15,7 @@ class TestServiceManager(unittest.TestCase):
         # А вот настоящий exe уходит в sc create с пробелом после binPath=
         with mock.patch("service_manager.subprocess.run") as m, \
              mock.patch("service_manager.os.path.isfile", return_value=True), \
-             mock.patch("service_manager.get_bin_path", return_value="C:\\fake\\winws.exe"):
+             mock.patch("zapret_core.scm.get_bin_path", return_value="C:\\fake\\winws.exe"):
             from service_manager import install_service
             install_service()
             args = m.call_args[0][0]
@@ -70,7 +70,7 @@ class TestServiceManager(unittest.TestCase):
         # Мок: файл с mode=all
         import io
         with mock.patch("service_manager.os.path.isfile", return_value=True), \
-             mock.patch("service_manager.open", mock.mock_open(read_data="mode=all\ntcp=100-200\nudp=300-400\n")):
+             mock.patch("builtins.open", mock.mock_open(read_data="mode=all\ntcp=100-200\nudp=300-400\n")):
             r2 = game_filter_status()
         self.assertEqual(r2["mode"], "all")
         self.assertEqual(r2["tcp"], "100-200")
@@ -173,6 +173,7 @@ class TestServiceManager(unittest.TestCase):
 
     def test_parse_strategy_args(self):
         import service_manager as s
+        import zapret_core.strategies as strat
         # general.bat существует в любой копии zapret — парсим по-настоящему
         args, err = s.parse_strategy_args("general")
         self.assertIsNone(err, err)
@@ -189,6 +190,7 @@ class TestServiceManager(unittest.TestCase):
         # .bat пишет аргументы длинными строками с продолжением через ^
         import tempfile, shutil, os as _os
         import service_manager as s
+        import zapret_core.strategies as strat
         d = tempfile.mkdtemp()
         try:
             bat = _os.path.join(d, "test-strategy.bat")
@@ -197,9 +199,9 @@ class TestServiceManager(unittest.TestCase):
                         'start "x" /min "%BIN%winws.exe" --wf-tcp=80,443 ^\r\n'
                         '--filter-tcp=443 --hostlist="%LISTS%list-general.txt" ^\r\n'
                         '--dpi-desync=fake --new\r\n')
-            with mock.patch.object(s, "ORIG_DIR", d), \
-                 mock.patch.object(s, "BIN_DIR", _os.path.join(d, "bin")), \
-                 mock.patch.object(s, "LISTS_DIR", _os.path.join(d, "lists")):
+            with mock.patch.object(strat, "ORIG_DIR", d), \
+                 mock.patch.object(strat, "BIN_DIR", _os.path.join(d, "bin")), \
+                 mock.patch.object(strat, "LISTS_DIR", _os.path.join(d, "lists")):
                 args, err = s.parse_strategy_args("test-strategy")
             self.assertIsNone(err, err)
             # все три строки склеены в один список аргументов
@@ -257,8 +259,8 @@ class TestServiceManager(unittest.TestCase):
                 r.stderr = ""
                 return r
             sr.side_effect = _side
-            with mock.patch("service_manager.winws_is_running", return_value=True), \
-                 mock.patch("service_manager.is_admin", return_value=False):
+            with mock.patch("zapret_core.diagnostics.winws_is_running", return_value=True), \
+                 mock.patch("zapret_core.diagnostics.is_admin", return_value=False):
                 d = run_diagnostics()
         self.assertGreaterEqual(len(d["checks"]), 17)
         names = {c["name"] for c in d["checks"]}
@@ -282,9 +284,9 @@ class TestServiceManager(unittest.TestCase):
                 r.stderr = ""
                 return r
             sr.side_effect = _side
-            with mock.patch("service_manager.winws_is_running", return_value=True), \
-                 mock.patch("service_manager.is_admin", return_value=True), \
-                 mock.patch("service_manager.tcp_timestamps", return_value=(True, "enabled")):
+            with mock.patch("zapret_core.diagnostics.winws_is_running", return_value=True), \
+                 mock.patch("zapret_core.diagnostics.is_admin", return_value=True), \
+                 mock.patch("zapret_core.diagnostics.tcp_timestamps", return_value=(True, "enabled")):
                 d = run_diagnostics()
         ts = next(c for c in d["checks"] if c["name"] == "TCP timestamps")
         self.assertEqual(ts["level"], "ok")
@@ -294,7 +296,7 @@ class TestServiceManager(unittest.TestCase):
     def test_tests_prerequisites_reports_problems(self):
         # Пре-чеки тестов честно перечисляют проблемы (права/curl/служба)
         from service_manager import tests_prerequisites
-        with mock.patch("service_manager.is_admin", return_value=False):
+        with mock.patch("zapret_core.tests_runner.is_admin", return_value=False):
             probs = tests_prerequisites()
         import i18n
         self.assertIn(i18n.t("tests.need_admin"), probs)
@@ -302,7 +304,7 @@ class TestServiceManager(unittest.TestCase):
     def test_run_tests_refuses_without_prereq(self):
         # Без прав тесты не запускаются вообще — возвращается список проблем
         from service_manager import run_tests
-        with mock.patch("service_manager.tests_prerequisites",
+        with mock.patch("zapret_core.tests_runner.tests_prerequisites",
                         return_value=["no admin"]):
             r = run_tests()
         self.assertFalse(r["ok"])
@@ -314,9 +316,9 @@ class TestServiceManager(unittest.TestCase):
         proc = mock.Mock()
         proc.stdout = iter(["[OK] Administrator rights detected", "done"])
         proc.stdin = mock.Mock()
-        with mock.patch("service_manager.tests_prerequisites", return_value=[]), \
+        with mock.patch("zapret_core.tests_runner.tests_prerequisites", return_value=[]), \
              mock.patch("service_manager.subprocess.Popen", return_value=proc), \
-             mock.patch("service_manager._latest_test_result", return_value=None):
+             mock.patch("zapret_core.tests_runner._latest_test_result", return_value=None):
             r = run_tests(test_type=1, mode=2, selection=3)
         written = proc.stdin.write.call_args[0][0]
         self.assertEqual(written, "1\n2\n3\n")
@@ -332,7 +334,7 @@ class TestServiceManager(unittest.TestCase):
         with open(lf, "w", encoding="utf-8") as f:
             f.write("1.2.3.4/32\n")
         try:
-            with mock.patch("service_manager.LISTS_DIR", d):
+            with mock.patch("zapret_core.lists.LISTS_DIR", d):
                 self.assertEqual(ipset_status(), "loaded")
                 r = toggle_ipset(); self.assertTrue(r["ok"]); self.assertEqual(ipset_status(), "none")
                 r = toggle_ipset(); self.assertTrue(r["ok"]); self.assertEqual(ipset_status(), "any")
@@ -345,7 +347,7 @@ class TestServiceManager(unittest.TestCase):
         from service_manager import set_game_filter, game_filter_label
         d = tempfile.mkdtemp()
         try:
-            with mock.patch("service_manager.ORIG_DIR", d):
+            with mock.patch("zapret_core.settings.ORIG_DIR", d):
                 r = set_game_filter("tcp")
                 self.assertTrue(r["ok"])
                 with open(os.path.join(d, "utils", "game_filter.enabled"), encoding="utf-8") as f:
@@ -359,7 +361,7 @@ class TestServiceManager(unittest.TestCase):
         from service_manager import toggle_check_updates, check_updates_flag
         d = tempfile.mkdtemp()
         try:
-            with mock.patch("service_manager.ORIG_DIR", d):
+            with mock.patch("zapret_core.settings.ORIG_DIR", d):
                 self.assertEqual(check_updates_flag(), "disabled")
                 r = toggle_check_updates(True); self.assertTrue(r["ok"])
                 self.assertEqual(check_updates_flag(), "enabled")

@@ -1,0 +1,30 @@
+# paths.py — автоопределение каталога zapret, константы и служебные пути
+import os
+
+# === Автоопределение каталога zapret (без хардкода одной копии) ===
+# Порядок: переменная окружения ZAPRET_DIR -> рабочая копия AppWatch -> ~/Pictures.
+def _detect_orig_dir():
+    candidates = []
+    env = os.environ.get("ZAPRET_DIR")
+    if env:
+        candidates.append(env)
+    candidates.append(os.path.join(os.environ.get("LOCALAPPDATA", ""),
+                                   "AppWatch", "Apps", "zapret-discord-youtube"))
+    candidates.append(os.path.join(os.path.expanduser("~"), "Pictures", "zapret-discord-youtube"))
+    for c in candidates:
+        if c and os.path.isfile(os.path.join(c, "bin", "winws.exe")):
+            return c
+    return candidates[-1]  # последний кандидат — для сообщений об ошибке
+
+ORIG_DIR = _detect_orig_dir()
+BIN_DIR = os.path.join(ORIG_DIR, "bin")
+LISTS_DIR = os.path.join(ORIG_DIR, "lists")
+SERVICE_NAME = "zapret"
+SERVICE_DISPLAY = "zapret"
+
+def get_bin_path():
+    # Службу ставит оригинальный service.bat (см. install_service: .bat как binPath запрещён)
+    return os.path.join(ORIG_DIR, "service.bat")
+
+APP_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))  # корень проекта
+STRATEGY_FILE = os.path.join(APP_DIR, ".strategy")  # последняя применённая стратегия
