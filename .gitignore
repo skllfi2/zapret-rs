@@ -5,3 +5,7 @@ __pycache__/
 venv/
 .pytest_cache/
 .strategy
+# артефакты PyInstaller (собрать заново: python build_exe.py)
+dist/
+build/
+*.spec
