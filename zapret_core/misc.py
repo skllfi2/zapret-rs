@@ -49,11 +49,14 @@ def hidden_cmd(cmd_list, cwd=ORIG_DIR, timeout=30):
     except Exception as e:
         return {"ok": False, "stdout": "", "stderr": str(e)}
 
-def relaunch_as_admin():
+def relaunch_as_admin(extra_args=()):
     """Перезапуск текущего приложения с повышением прав (UAC).
-    args = argv целиком (включая имя скрипта), иначе запустится пустой python."""
+    args = argv целиком (включая имя скрипта), иначе запустится пустой python;
+    у frozen-exe путь к программе сам является программой — его не дублируем."""
     try:
-        args = " ".join(f'"{a}"' for a in sys.argv)
+        argv = list(sys.argv[1:] if getattr(sys, "frozen", False) else sys.argv)
+        argv += list(extra_args)
+        args = " ".join(f'"{a}"' for a in argv)
         h = ctypes.windll.shell32.ShellExecuteW(None, "runas", sys.executable, args, None, 1)
         return h > 32  # >32 = успех
     except Exception:

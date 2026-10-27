@@ -305,6 +305,9 @@ STRINGS = {
     "tests.aborted": {"ru": "Тесты прерваны с ошибкой — см. вывод", "en": "Tests aborted with an error — see output"},
     "tests.prereq_ok": {"ru": "Условия выполнены — можно запускать", "en": "All conditions met — ready to run"},
     "tests.wont_start": {"ru": "Тесты не запустятся: {p}", "en": "Tests won't start: {p}"},
+    "tests.best_none": {
+        "ru": "Результатов тестов нет или в них нет \"Best strategy\" — сначала запусти Run Tests",
+        "en": "No test results or no \"Best strategy\" line yet — run Run Tests first"},
 
     # ---------- relaunch / статус ----------
     "sm.relaunch_ok": {"ru": "Перезапуск с правами администратора", "en": "Relaunching with administrator rights"},
@@ -387,4 +390,28 @@ STRINGS = {
     "ui.no_bins": {"ru": "[X] Нет .bin файлов в bin/", "en": "[X] No .bin files in bin/"},
     "ui.fakes_list": {"ru": "Fake-файлы:", "en": "Fake files:"},
     "ui.payload_warn": {"ru": "⚠ нет .bin: {n} — восстановить", "en": "⚠ missing .bin: {n} — restore"},
+    # панель вывода: копирование / сохранение / очистка
+    "ui.out_copy": {"ru": "Копировать", "en": "Copy"},
+    "ui.out_save": {"ru": "Сохранить...", "en": "Save..."},
+    "ui.out_clear": {"ru": "Очистить", "en": "Clear"},
+    "ui.out_copy_done": {"ru": "[+] Вывод скопирован в буфер обмена", "en": "[+] Output copied to clipboard"},
+    "ui.out_saved": {"ru": "[+] Вывод сохранён: {p}", "en": "[+] Output saved: {p}"},
+    "ui.out_save_fail": {"ru": "[X] Не удалось сохранить: {e}", "en": "[X] Failed to save: {e}"},
+    # лучшая стратегия из результатов тестов
+    "ui.apply_best": {"ru": "Применить лучшую стратегию", "en": "Apply best strategy"},
+    "ui.best_found": {
+        "ru": "[+] Лучшая стратегия по тестам: {s} — применяю...",
+        "en": "[+] Best strategy from tests: {s} — applying..."},
+    "ui.best_fail": {"ru": "[X] Не удалось применить лучшую стратегию: {e}",
+                     "en": "[X] Failed to apply best strategy: {e}"},
+    # трей
+    "ui.tray_show": {"ru": "Показать окно", "en": "Show window"},
+    "ui.tray_exit": {"ru": "Выход", "en": "Quit"},
+    "ui.tray_tooltip": {"ru": "zapret-simple — служба: {s}", "en": "zapret-simple — service: {s}"},
+    # надёжность: единственный экземпляр и crash-лог
+    "ui.already_running": {"ru": "zapret-simple уже запущено.", "en": "zapret-simple is already running."},
+    "ui.crash_title": {"ru": "Непредвиденная ошибка", "en": "Unexpected error"},
+    "ui.crash_msg": {
+        "ru": "Приложение продолжит работу.\nПодробности записаны в лог:\n{p}",
+        "en": "The application will continue.\nDetails were written to the log:\n{p}"},
 }

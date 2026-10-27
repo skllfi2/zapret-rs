@@ -80,6 +80,48 @@ class TestPySideUI(unittest.TestCase):
     def test_output_populated(self):
         self.assertTrue(self.win.output.toPlainText().strip(), "Область вывода пуста")
 
+    def test_output_panel_buttons_present(self):
+        # Копировать/Сохранить/Очистить + лучшая стратегия из тестов
+        texts = self._btn_texts()
+        for key in ("ui.out_copy", "ui.out_save", "ui.out_clear", "ui.apply_best"):
+            self.assertIn(self.i18n.t(key), texts, f"Кнопка {key} отсутствует")
+
+    def test_copy_output_to_clipboard(self):
+        self.win.output.setPlainText("copy-test-body")
+        self.win._copy_output()
+        self.assertEqual(self.app.clipboard().text(), "copy-test-body")
+
+    def test_best_strategy_applies_to_selector(self):
+        # Мок best_strategy(ok) -> имя попадает в селектор и в вывод
+        import time
+        import unittest.mock as mock
+        self.win.output.clear()
+        with mock.patch("service_manager.best_strategy",
+                        return_value={"ok": True, "strategy": "general", "file": "r.txt"}):
+            self.win.apply_best_strategy()
+        expect = self.i18n.t("ui.best_found", s="general")
+        for _ in range(50):
+            self.app.processEvents()
+            time.sleep(0.02)
+            if expect in self.win.output.toPlainText():
+                break
+        self.assertIn(expect, self.win.output.toPlainText())
+        self.assertIn("general", self.win.strat_box.currentText())
+
+    def test_best_strategy_without_results_warns(self):
+        import time
+        import unittest.mock as mock
+        self.win.output.clear()
+        with mock.patch("service_manager.best_strategy",
+                        return_value={"ok": False, "strategy": None, "reason": "no-results"}):
+            self.win.apply_best_strategy()
+        for _ in range(50):
+            self.app.processEvents()
+            time.sleep(0.02)
+            if "no-results" in self.win.output.toPlainText():
+                break
+        self.assertIn("no-results", self.win.output.toPlainText())
+
     def test_status_updates_via_threadpool(self):
         # Статус читается в фоне через QThreadPool и доставляется сигналом
         import time
@@ -100,7 +142,6 @@ class TestPySideUI(unittest.TestCase):
 
 class TestPySideSource(unittest.TestCase):
     """Текстовые проверки — работают даже без установленного PySide6."""
-
     def test_service_manager_imported(self):
         self.assertIn("import service_manager", _read_src())
 
@@ -117,6 +158,55 @@ class TestPySideSource(unittest.TestCase):
         # Применение стратегии без прав должно честно отказываться
         src = _read_src()
         self.assertIn("is_admin()", src)
+
+
+@unittest.skipUnless(HAS_PYSIDE, "PySide6 не установлен")
+class TestPySideTray(unittest.TestCase):
+    """Трей: сворачивание при закрытии, выход только через меню трея."""
+
+    @classmethod
+    def setUpClass(cls):
+        import zapret_pyside as z
+        import i18n
+        from PySide6.QtWidgets import QApplication, QSystemTrayIcon
+        cls.z, cls.i18n = z, i18n
+        cls.QSystemTrayIcon = QSystemTrayIcon
+        cls.app = QApplication.instance() or QApplication([])
+        # В offscreen системного трея нет — имитируем наличие для проверки логики
+        cls._orig_avail = QSystemTrayIcon.isSystemTrayAvailable
+        QSystemTrayIcon.isSystemTrayAvailable = staticmethod(lambda: True)
+        cls.win = z.MainWindow()
+
+    @classmethod
+    def tearDownClass(cls):
+        cls.QSystemTrayIcon.isSystemTrayAvailable = cls._orig_avail
+        cls.win._exiting = True
+        cls.win.close()
+
+    def test_tray_created_with_localized_menu(self):
+        self.assertIsNotNone(self.win.tray, "Трей не создан при доступном системном")
+        menu = self.win.tray.contextMenu()
+        self.assertIsNotNone(menu)
+        labels = [a.text() for a in menu.actions()]
+        self.assertIn(self.i18n.t("ui.tray_show"), labels)
+        self.assertIn(self.i18n.t("ui.tray_exit"), labels)
+
+    def test_close_goes_to_tray_and_exit_really_closes(self):
+        from PySide6.QtGui import QCloseEvent
+        ev = QCloseEvent()
+        self.win.closeEvent(ev)
+        self.assertFalse(ev.isAccepted(), "Обычное закрытие должно уходить в трей (ignored)")
+        # Настоящий выход — только через меню трея (_exiting)
+        self.win._exiting = True
+        ev2 = QCloseEvent()
+        self.win.closeEvent(ev2)
+        self.assertTrue(ev2.isAccepted(), "Выход через трей должен закрывать окно")
+        self.win._exiting = False
+
+    def test_status_icon_is_paintable(self):
+        from PySide6.QtGui import QColor
+        icon = self.win._status_icon(QColor("#5ee87f"))
+        self.assertFalse(icon.isNull())
 
 
 if __name__ == "__main__":

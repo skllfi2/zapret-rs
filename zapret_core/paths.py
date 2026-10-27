@@ -1,5 +1,5 @@
 # paths.py — автоопределение каталога zapret, константы и служебные пути
-import os
+import os, sys
 
 # === Автоопределение каталога zapret (без хардкода одной копии) ===
 # Порядок: переменная окружения ZAPRET_DIR -> рабочая копия AppWatch -> ~/Pictures.
@@ -26,5 +26,10 @@ def get_bin_path():
     # Службу ставит оригинальный service.bat (см. install_service: .bat как binPath запрещён)
     return os.path.join(ORIG_DIR, "service.bat")
 
-APP_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))  # корень проекта
+# Корень проекта; у frozen-exe (PyInstaller) — каталог самой .exe, иначе .strategy
+# попадал бы во временный распаковочный каталог _MEIPASS и терялся при перезапуске.
+if getattr(sys, "frozen", False):
+    APP_DIR = os.path.dirname(os.path.abspath(sys.executable))
+else:
+    APP_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 STRATEGY_FILE = os.path.join(APP_DIR, ".strategy")  # последняя применённая стратегия

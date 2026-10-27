@@ -4,19 +4,21 @@
 # секции :: SERVICE / :: SETTINGS / :: UPDATES / :: TOOLS, статусы в квадратных скобках.
 # Тёмная тема ZuiV2, вывод с цветами PrintGreen/PrintYellow/PrintRed.
 # PySide6 6.12.0 (abi3, Python 3.15+) — только Essentials.
-import sys, os, html
+import sys, os, html, datetime
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import service_manager
 import i18n
+import zapret_core.applog as applog
 from i18n import t
 
 try:
     from PySide6.QtCore import Qt, QObject, QRunnable, QThreadPool, Signal, Slot, QTimer
-    from PySide6.QtGui import QFont, QAction
+    from PySide6.QtGui import QFont, QAction, QIcon, QPixmap, QPainter, QColor
     from PySide6.QtWidgets import (
         QApplication, QMainWindow, QWidget, QVBoxLayout, QHBoxLayout, QGridLayout,
         QFrame, QLabel, QPushButton, QComboBox, QTextEdit, QSpinBox, QMenu,
-        QDialog, QFormLayout, QDialogButtonBox, QMessageBox,
+        QDialog, QFormLayout, QDialogButtonBox, QMessageBox, QFileDialog,
+        QSystemTrayIcon,
     )
 except ImportError:
     print("ERROR: PySide6 не установлен. Выполни: pip install PySide6-Essentials")
@@ -183,6 +185,11 @@ class MainWindow(QMainWindow):
         self._build_ui()
         self._load_strategies()
 
+        # Трей: создаётся после сборки окна; None — системного трея нет (offscreen)
+        self.tray = None
+        self._exiting = False
+        self._init_tray()
+
         # Живой вывод тестов: сигнал рабочего потока -> слот главного потока
         self.line_signal.connect(self._on_line_signal)
 
@@ -323,6 +330,7 @@ class MainWindow(QMainWindow):
         self._menu_btn(g, 1, 0, t("ui.remove_conflicts"), lambda: self.run_action("remove_conflicts"))
         self._menu_btn(g, 1, 1, t("ui.clear_discord"), lambda: self.run_action("clear_discord"))
         self._menu_btn(g, 2, 0, t("ui.restore_payload"), lambda: self.run_action("restore_payloads"))
+        self._menu_btn(g, 2, 1, t("ui.apply_best"), self.apply_best_strategy)
         g.setColumnStretch(0, 1)
         g.setColumnStretch(1, 1)
         c.addLayout(g)
@@ -335,10 +343,21 @@ class MainWindow(QMainWindow):
         o = QVBoxLayout(out_panel)
         o.setContentsMargins(14, 10, 14, 10)
         o.setSpacing(6)
-        o.addWidget(QLabel(t("ui.output"), objectName="section"))
         self.output = QTextEdit()
         self.output.setReadOnly(True)
         self.output.setMinimumWidth(360)
+        # Заголовок панели + копирование/сохранение/очистка вывода
+        out_head = QHBoxLayout()
+        out_head.addWidget(QLabel(t("ui.output"), objectName="section"))
+        out_head.addStretch()
+        for label, slot in ((t("ui.out_copy"), self._copy_output),
+                            (t("ui.out_save"), self._save_output),
+                            (t("ui.out_clear"), self._clear_output)):
+            b = QPushButton(label, objectName="small")
+            b.setFixedHeight(26)
+            b.clicked.connect(slot)
+            out_head.addWidget(b)
+        o.addLayout(out_head)
         o.addWidget(self.output, 1)
         o.addWidget(QLabel(t("ui.footer"), objectName="footer"))
         body.addWidget(out_panel, 2)
@@ -361,8 +380,57 @@ class MainWindow(QMainWindow):
             old.deleteLater()
         self._build_ui()
         self._load_strategies()
+        self._init_tray()  # подписи меню трея тоже локализованы
         self.refresh()
         self.refresh_menu_status()
+
+    # ---------- Трей ----------
+    def _init_tray(self):
+        """Трей: кружок статуса службы, клик — показать окно, меню — Показать/Выход.
+        Повторный вызов (смена языка) пересобирает меню на текущем языке."""
+        if not QSystemTrayIcon.isSystemTrayAvailable():
+            self.tray = None
+            return
+        if self.tray is None:
+            self.tray = QSystemTrayIcon(self)
+            self.tray.activated.connect(self._on_tray_activated)
+        menu = QMenu(self)
+        act_show = QAction(t("ui.tray_show"), menu)
+        act_show.triggered.connect(self._show_from_tray)
+        act_exit = QAction(t("ui.tray_exit"), menu)
+        act_exit.triggered.connect(self._exit_from_tray)
+        menu.addAction(act_show)
+        menu.addAction(act_exit)
+        self.tray.setContextMenu(menu)
+        self.tray.setIcon(self._status_icon(COLORS["text_muted"]))
+        self.tray.setToolTip(t("ui.tray_tooltip", s="…"))
+        self.tray.show()
+
+    @staticmethod
+    def _status_icon(color):
+        """Кружок-иконка нужного цвета — без внешних файлов ресурсов."""
+        pm = QPixmap(64, 64)
+        pm.fill(Qt.transparent)
+        p = QPainter(pm)
+        p.setRenderHint(QPainter.Antialiasing)
+        p.setPen(Qt.NoPen)
+        p.setBrush(QColor(color))
+        p.drawEllipse(0, 0, 64, 64)
+        p.end()
+        return QIcon(pm)
+
+    def _on_tray_activated(self, reason):
+        if reason in (QSystemTrayIcon.Trigger, QSystemTrayIcon.DoubleClick):
+            self._show_from_tray()
+
+    def _show_from_tray(self):
+        self.show()
+        self.raise_()
+        self.activateWindow()
+
+    def _exit_from_tray(self):
+        self._exiting = True
+        self.close()
 
     def _status_cell(self, grid, row, col, attr):
         lbl = QLabel("—")
@@ -378,6 +446,26 @@ class MainWindow(QMainWindow):
             f'<span style="color:{color}">{html.escape(str(text))}</span>')
         sb = self.output.verticalScrollBar()
         sb.setValue(sb.maximum())
+
+    def _copy_output(self):
+        QApplication.clipboard().setText(self.output.toPlainText())
+        self.add_out(t("ui.out_copy_done"), "ok")
+
+    def _clear_output(self):
+        self.output.clear()
+
+    def _save_output(self):
+        default = f"zapret-output_{datetime.datetime.now():%Y-%m-%d_%H-%M-%S}.txt"
+        path, _ = QFileDialog.getSaveFileName(self, t("ui.out_save"), default,
+                                              "Text (*.txt);;All files (*)")
+        if not path:
+            return
+        try:
+            with open(path, "w", encoding="utf-8") as f:
+                f.write(self.output.toPlainText())
+            self.add_out(t("ui.out_saved", p=path), "ok")
+        except OSError as e:
+            self.add_out(t("ui.out_save_fail", e=e), "bad")
 
     # ---------- Фоновые операции ----------
     def submit(self, fn, on_done, *args, **kwargs):
@@ -572,6 +660,10 @@ class MainWindow(QMainWindow):
             self.payload_warn.setText("")
         else:
             self.payload_warn.setText(t("ui.payload_warn", n=len(pl['missing'])))
+        # Трей: цвет кружка и подсказка = статус службы
+        if self.tray is not None:
+            self.tray.setIcon(self._status_icon(color))
+            self.tray.setToolTip(t("ui.tray_tooltip", s=d.get("status", "?")))
 
     def refresh_menu_status(self):
         """Статусы в квадратных скобках + версия (как шапка меню service.bat)."""
@@ -592,6 +684,25 @@ class MainWindow(QMainWindow):
         if not r.get("admin"):
             # Тонкое напоминание — в оригинале права тоже нужны для части пунктов
             pass
+
+    # ---------- Лучшая стратегия из результатов тестов ----------
+    def apply_best_strategy(self):
+        """Читает 'Best strategy' из последнего test_results_*.txt и применяет её
+        тем же путём, что и кнопка Apply (проверка прав, фон, перезапуск службы)."""
+        self.add_out(f">>> {t('ui.apply_best')}...", "info")
+        self.submit(service_manager.best_strategy, self._best_done)
+
+    def _best_done(self, r):
+        r = r if isinstance(r, dict) else {}
+        if not r.get("ok"):
+            self.add_out(f"[?] {r.get('reason') or t('tests.best_none')}", "warn")
+            return
+        sid = r["strategy"]
+        self.add_out(t("ui.best_found", s=sid), "ok")
+        self.strat_box.blockSignals(True)
+        self.strat_box.setCurrentText(sid)
+        self.strat_box.blockSignals(False)
+        self.apply_strategy()
 
     # ---------- Fakes ----------
     def show_fakes(self):
@@ -627,19 +738,70 @@ class MainWindow(QMainWindow):
                      "ok" if ok else "bad")
 
     def closeEvent(self, ev):
+        if self.tray is not None and not self._exiting:
+            # Есть трей — закрытие прячет окно; настоящий выход только из меню трея
+            ev.ignore()
+            self.hide()
+            return
         self.pool.waitForDone(2000)
         super().closeEvent(ev)
 
 
 def main():
+    # 1. Лог и перехват крашей — до создания окна, чтобы падало уже «под наблюдением»
+    applog.install_excepthook()
     app = QApplication(sys.argv)
     app.setStyleSheet(STYLESHEET)
+
+    # 2. Один экземпляр: именованный мьютекс ядра Windows
+    mutex, already_running = _acquire_single_instance()
+    if already_running:
+        QMessageBox.warning(None, "zapret-simple", t("ui.already_running"))
+        return 1
+
+    # 3. Автоповышение прав: один UAC-вопрос при старте; при отказе работаем без прав
+    if not service_manager.is_admin() and "--no-elevate" not in sys.argv:
+        if service_manager.relaunch_as_admin(extra_args=["--no-elevate"]):
+            _release_mutex(mutex)  # отпускаем до выхода — иначе ребёнок упрётся в мьютекс
+            applog.log("relaunched elevated")
+            return 0
+        applog.log("elevation declined — running without admin rights")
+
     w = MainWindow()
     ag = app.primaryScreen().availableGeometry()
     w.move(ag.center() - w.rect().center())
     w.show()
-    sys.exit(app.exec())
+    code = app.exec()
+    _release_mutex(mutex)
+    return code
+
+
+def _acquire_single_instance():
+    """(хэндл_мьютекса, уже_запущен?). Хэндл держим живым весь срок процесса."""
+    try:
+        import ctypes
+        kernel32 = ctypes.WinDLL("kernel32", use_last_error=True)
+        kernel32.CreateMutexW.argtypes = (ctypes.c_wchar_p, ctypes.c_bool, ctypes.c_wchar_p)
+        kernel32.CreateMutexW.restype = ctypes.c_void_p
+        handle = kernel32.CreateMutexW(None, False, "Local\\zapret-simple-ui")
+        if not handle:
+            return None, False
+        if ctypes.get_last_error() == 183:  # ERROR_ALREADY_EXISTS — уже запущен
+            _release_mutex(handle)
+            return None, True
+        return handle, False
+    except Exception:
+        return None, False  # не смогли проверить — не мешаем запуску
+
+
+def _release_mutex(handle):
+    if handle:
+        try:
+            import ctypes
+            ctypes.WinDLL("kernel32", use_last_error=True).CloseHandle(handle)
+        except Exception:
+            pass
 
 
 if __name__ == "__main__":
-    main()
+    sys.exit(main())
