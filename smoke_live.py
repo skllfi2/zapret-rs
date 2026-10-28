@@ -138,8 +138,11 @@ def step_tests(args: argparse.Namespace, sid: str) -> None:
         return
     # Как в оригинале: тесты требуют отсутствия службы (Remove Services -> Run Tests)
     if service_installed():
-        yes = args.yes or (input("  Служба zapret установлена — удалить перед тестами? [y/N]: ")
-                           .strip().lower() in ("y", "yes", "д", "да"))
+        try:
+            answer = input("  Служба zapret установлена — удалить перед тестами? [y/N]: ")
+        except EOFError:  # stdin не консоль (перенаправлен) — без ручного подтверждения не трогаем
+            answer = ""
+        yes = args.yes or answer.strip().lower() in ("y", "yes", "д", "да")
         if not yes:
             check(False, "удаление службы перед тестами", "отменено пользователем")
             return
@@ -157,9 +160,8 @@ def step_tests(args: argparse.Namespace, sid: str) -> None:
 
     r = run_tests(on_line=on_line, test_type=args.test_type, mode=args.mode,
                   selection=args.selection, timeout=args.timeout)
+    # строки уже напечатаны живьём через on_line — здесь только итог
     check(bool(r.get("ok")), "test zapret.ps1 завершился", str(r.get("service"))[:300])
-    for ln in r.get("stdout", []) or []:
-        print("   >", ln)
     if r.get("results_file"):
         print("  [INFO] результаты:", r["results_file"])
     # Возврат в рабочее состояние: Best strategy (или прежняя), как после тестов в оригинале

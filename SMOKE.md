@@ -58,7 +58,7 @@
       «Требуются права администратора» (без падений);
 - [ ] пункт меню «Повысить права» (relaunch_admin) перезапускает окно через UAC;
 - [ ] в экзекутабле (`dist\zapret-simple.exe`) та же логика: `frozen=True`, лог пишется
-      в `zapret.log` рядом с exe.
+      в `%LOCALAPPDATA%\zapret-simple\zapret.log` (не рядом с exe).
 
 ## После прогона
 
