@@ -91,12 +91,19 @@ Update Hosts / Check for Updates), `:: TOOLS` (Run Diagnostics / Run Tests).
 ## Тесты и качество кода
 
 ```bat
-python -m unittest discover -s tests -v   # 78 тестов: ядро, i18n, UI/tray (offscreen)
+python -m unittest discover -s tests -v   # 188 тестов: ядро, i18n, UI/tray (offscreen), smoke-скрипт
 python test_verify.py                     # офлайн-проверки структуры без запуска окна
 python -m ruff check .                    # линт (конфиг в ruff.toml) — 0 ошибок
+python -m mypy                            # типизация (mypy.ini) — 0 ошибок
 ```
 
 Сигнатуры всех функций `zapret_core` типизированы (аннотации параметров и возвратов).
+
+**Живой smoke** (нужны права администратора, см. `SMOKE.md`): `smoke_live.bat` —
+end-to-end применение стратегии (служба Running + реальный winws.exe + binPath + `.strategy`),
+`smoke_live.bat --tests` — реальный запуск `utils\test zapret.ps1` по схеме оригинала
+Remove Services → Run Tests с применением Best strategy после; визуальная часть
+(трей / RU-EN / UAC) — по чек-листу в `SMOKE.md`.
 
 ## Сборка одиночного exe
 
