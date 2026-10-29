@@ -207,6 +207,7 @@ class MainWindow(QMainWindow):
         self._workers: set[Worker] = set()
         self._busy = False
         self._tests_running = False
+        self._best_pending = False  # apply_best -> apply_strategy: флаг для ui.best_fail (D4)
 
         self._build_ui()
         self._load_strategies()
@@ -228,6 +229,7 @@ class MainWindow(QMainWindow):
 
     # ---------- UI ----------
     def _build_ui(self) -> None:
+        self._menu_buttons: list[QPushButton] = []  # реестр кнопок действий (гасятся в submit_action)
         root = QWidget()
         lay = QVBoxLayout(root)
         lay.setContentsMargins(0, 0, 0, 0)
@@ -258,11 +260,11 @@ class MainWindow(QMainWindow):
         self.strat_box.setFixedWidth(230)
         self.strat_box.currentTextChanged.connect(lambda _: self.apply_strategy())
         srow.addWidget(self.strat_box)
-        apply_btn = QPushButton(t("ui.apply"))
-        apply_btn.setObjectName("small")
-        apply_btn.setFixedWidth(100)
-        apply_btn.clicked.connect(self.apply_strategy)
-        srow.addWidget(apply_btn)
+        self.apply_btn = QPushButton(t("ui.apply"))
+        self.apply_btn.setObjectName("small")
+        self.apply_btn.setFixedWidth(100)
+        self.apply_btn.clicked.connect(self.apply_strategy)
+        srow.addWidget(self.apply_btn)
         srow.addStretch()
         # Переключатель языка ru/en — выбор сохраняется и переживает перезапуск
         self.lang_btn = QPushButton(i18n.LANG.upper())
@@ -321,7 +323,7 @@ class MainWindow(QMainWindow):
         self._menu_btn(g, 1, 0, t("ui.check_status"), lambda: self.run_action("service_status"))
         self._menu_btn(g, 1, 1, t("ui.start_service"), lambda: self.run_action("start"))
         self._menu_btn(g, 1, 2, t("ui.stop_service"), lambda: self.run_action("stop"))
-        self._menu_btn(g, 0, 2, t("ui.admin_rights"), lambda: self.run_action("relaunch_admin"))
+        self._menu_btn(g, 0, 2, t("ui.admin_rights"), self._relaunch_admin)
         g.setColumnStretch(0, 3)
         g.setColumnStretch(1, 3)
         g.setColumnStretch(2, 2)
@@ -414,6 +416,7 @@ class MainWindow(QMainWindow):
         btn.setMinimumHeight(34)
         btn.clicked.connect(cmd)
         grid.addWidget(btn, row, col)
+        self._menu_buttons.append(btn)
         return btn
 
     def _switch_lang(self) -> None:
@@ -431,23 +434,27 @@ class MainWindow(QMainWindow):
     # ---------- Трей ----------
     def _init_tray(self) -> None:
         """Трей: кружок статуса службы, клик — показать окно, меню — Показать/Выход.
-        Повторный вызов (смена языка) пересобирает меню на текущем языке."""
+        Повторный вызов (смена языка) только обновляет подписи и подсказку (D3):
+        QAction переиспользуются, иконка не сбрасывается в серый."""
         if not QSystemTrayIcon.isSystemTrayAvailable():
             self.tray = None
             return
         if self.tray is None:
             self.tray = QSystemTrayIcon(self)
             self.tray.activated.connect(self._on_tray_activated)
-        menu = QMenu(self)
-        act_show = QAction(t("ui.tray_show"), menu)
-        act_show.triggered.connect(self._show_from_tray)
-        act_exit = QAction(t("ui.tray_exit"), menu)
-        act_exit.triggered.connect(self._exit_from_tray)
-        menu.addAction(act_show)
-        menu.addAction(act_exit)
-        self.tray.setContextMenu(menu)
-        self.tray.setIcon(self._status_icon(COLORS["text_muted"]))
-        self.tray.setToolTip(t("ui.tray_tooltip", s="…"))
+            self._tray_menu = QMenu(self)
+            self._tray_act_show = QAction(t("ui.tray_show"), self._tray_menu)
+            self._tray_act_show.triggered.connect(self._show_from_tray)
+            self._tray_act_exit = QAction(t("ui.tray_exit"), self._tray_menu)
+            self._tray_act_exit.triggered.connect(self._exit_from_tray)
+            self._tray_menu.addAction(self._tray_act_show)
+            self._tray_menu.addAction(self._tray_act_exit)
+            self.tray.setContextMenu(self._tray_menu)
+            self.tray.setIcon(self._status_icon(COLORS["text_muted"]))
+            self.tray.setToolTip(t("ui.tray_tooltip", s="…"))
+        else:
+            self._tray_act_show.setText(t("ui.tray_show"))
+            self._tray_act_exit.setText(t("ui.tray_exit"))
         self.tray.show()
 
     @staticmethod
@@ -526,6 +533,38 @@ class MainWindow(QMainWindow):
         self.pool.start(w)
         return w
 
+    def submit_action(self, fn: Callable[..., Any], on_done: Callable[[Any], None],
+                      *args: Any, **kwargs: Any) -> Worker:
+        """submit + гашение кнопок действий на время операции (B1): двойной клик
+        не должен порождать параллельные SCM-вызовы/тесты. Статус-опросы
+        (refresh/refresh_menu_status) идут через submit и кнопки не трогают."""
+        for b in self._menu_buttons:
+            b.setEnabled(False)
+
+        def _done(result: Any) -> None:
+            for b in self._menu_buttons:
+                b.setEnabled(True)
+            on_done(result)
+
+        return self.submit(fn, _done, *args, **kwargs)
+
+    # ---------- Повышение прав (A3) ----------
+    def _relaunch_admin(self) -> None:
+        """Кнопка «Повысить права»: отпускаем мьютекс, зовём UAC-перезапуск.
+        При успехе закрываем текущий экземпляр (иначе ребёнок упирается в
+        ERROR_ALREADY_EXISTS); при отказе UAC — возвращаем мьютекс."""
+        self.add_out(f">>> {t('ui.admin_rights')}", "info")
+        _release_mutex()
+        self.submit_action(service_manager.run_service_action, self._relaunch_done, "relaunch_admin")
+
+    def _relaunch_done(self, r: Any) -> None:
+        self._action_done(r)
+        if isinstance(r, dict) and r.get("ok"):
+            self._exiting = True  # elevated-копия уже запущена — выходим без мьютекса
+            self.close()
+        else:
+            _acquire_single_instance()  # UAC отклонён — возвращаем мьютекс
+
     # ---------- Стратегии ----------
     def _load_strategies(self) -> None:
         try:
@@ -544,17 +583,34 @@ class MainWindow(QMainWindow):
     def apply_strategy(self) -> None:
         sid = self.strat_box.currentText()
         if not sid:
+            self._best_pending = False  # ранний отказ — _apply_done не выстрелит
             self.add_out(t("ui.err_no_strategy"), "bad")
             return
         if not service_manager.is_admin():
+            self._best_pending = False
             self.add_out(t("ui.apply_need_admin"), "bad")
             return
         self.add_out(t("ui.applying_strategy", s=sid), "info")
-        self.submit(service_manager.apply_strategy, self._apply_done, sid)
+        # На время применения гасим комбобокс и кнопку (B1): две быстрые смены
+        # не должны перетирать binPath друг другу
+        self.strat_box.setEnabled(False)
+        self.apply_btn.setEnabled(False)
+        self.submit_action(service_manager.apply_strategy, self._apply_done, sid)
 
     def _apply_done(self, r: Any) -> None:
+        self.strat_box.setEnabled(True)
+        self.apply_btn.setEnabled(True)
         r = r if isinstance(r, dict) else {}
-        self.add_out(f"[{'OK' if r.get('ok') else 'X'}] {r.get('service', r.get('error'))}",
+        msg = r.get("service", r.get("error"))
+        if self._best_pending:
+            self._best_pending = False
+            if not r.get("ok"):
+                # apply_best_strategy -> apply_strategy не удалась: честный итог (D4)
+                self.add_out(t("ui.best_fail", e=msg), "bad")
+                self.update_status()
+                self.refresh_menu_status()
+                return
+        self.add_out(f"[{'OK' if r.get('ok') else 'X'}] {msg}",
                      "ok" if r.get("ok") else "bad")
         self.update_status()
         self.refresh_menu_status()
@@ -562,7 +618,7 @@ class MainWindow(QMainWindow):
     # ---------- Действия ----------
     def run_action(self, action: str) -> None:
         self.add_out(f">>> {action}", "info")
-        self.submit(service_manager.run_service_action, self._action_done, action)
+        self.submit_action(service_manager.run_service_action, self._action_done, action)
 
     def _action_done(self, r: Any) -> None:
         level = "ok" if isinstance(r, dict) and r.get("ok") else "bad"
@@ -596,13 +652,13 @@ class MainWindow(QMainWindow):
 
     def _set_game_filter(self, mode: str) -> None:
         self.add_out(f">>> Game Filter -> {mode}", "info")
-        self.submit(service_manager.run_service_action, self._action_done,
-                    "set_game_filter", mode=mode)
+        self.submit_action(service_manager.run_service_action, self._action_done,
+                           "set_game_filter", mode=mode)
 
     # ---------- Диагностика (17 проверок оригинала) ----------
     def run_diagnostics(self) -> None:
         self.add_out(f">>> {t('ui.run_diagnostics')}...", "info")
-        self.submit(service_manager.run_diagnostics, self._diag_done)
+        self.submit_action(service_manager.run_diagnostics, self._diag_done)
 
     def _diag_done(self, r: Any) -> None:
         if not isinstance(r, dict):
@@ -623,24 +679,32 @@ class MainWindow(QMainWindow):
         if self._tests_running:
             self.add_out(t("ui.games_running"), "warn")
             return
-        self.submit(service_manager.run_service_action, self._tests_prereq_done,
-                    "tests_prereq")
+        # Guard ставим ДО prereq-воркера (B1): второй клик не должен пройти,
+        # даже пока первый prereq ещё в очереди; снимается при отказе prereq,
+        # отмене диалога и в _tests_done
+        self._tests_running = True
+        self.submit_action(service_manager.run_service_action, self._tests_prereq_done,
+                           "tests_prereq")
 
     def _tests_prereq_done(self, r: Any) -> None:
         if not r.get("ok"):
+            self._tests_running = False
             for p in r.get("problems", []):
                 self.add_out(f"[X] {p}", "bad")
             self.add_out(t("ui.fix_errors"), "warn")
             return
+        if not self._tests_running:
+            return  # воркер уже завершился (закрытие окна) — не открываем диалог
         dlg = TestDialog(self)
         if dlg.exec() != QDialog.DialogCode.Accepted:
+            self._tests_running = False
             return
         kind, mode, sel = dlg.values()
-        self._tests_running = True
         self.add_out(t("ui.running_tests", t=kind, m=mode), "info")
-        # Живой вывод: колбэк вызывается из рабочего потока, в UI — только через сигнал
+        # Живой вывод: колбэк вызывается из рабочего потока, в UI — только через сигнал;
+        # should_stop (B2): закрытие окна останавливает ps1, а не оставляет сироту
         w = Worker(service_manager.run_tests, test_type=kind, mode=mode, selection=sel,
-                   on_line=self._emit_line)
+                   on_line=self._emit_line, should_stop=lambda: self._exiting)
         self._workers.add(w)
         w.signals.finished.connect(self._tests_done)
         self.pool.start(w)
@@ -736,7 +800,7 @@ class MainWindow(QMainWindow):
         """Читает 'Best strategy' из последнего test_results_*.txt и применяет её
         тем же путём, что и кнопка Apply (проверка прав, фон, перезапуск службы)."""
         self.add_out(f">>> {t('ui.apply_best')}...", "info")
-        self.submit(service_manager.best_strategy, self._best_done)
+        self.submit_action(service_manager.best_strategy, self._best_done)
 
     def _best_done(self, r: Any) -> None:
         r = r if isinstance(r, dict) else {}
@@ -748,11 +812,12 @@ class MainWindow(QMainWindow):
         self.strat_box.blockSignals(True)
         self.strat_box.setCurrentText(sid)
         self.strat_box.blockSignals(False)
+        self._best_pending = True  # если apply_strategy не выстрелит — _apply_done отчитается (D4)
         self.apply_strategy()
 
     # ---------- Fakes ----------
     def show_fakes(self) -> None:
-        self.submit(service_manager.run_service_action, self._fakes_listed, "list_fakes")
+        self.submit_action(service_manager.run_service_action, self._fakes_listed, "list_fakes")
 
     def _fakes_listed(self, r: Any) -> None:
         r = r if isinstance(r, dict) else {}
@@ -774,8 +839,8 @@ class MainWindow(QMainWindow):
         if dlg.exec() != QDialog.DialogCode.Accepted:
             return
         kind, number = dlg.values()
-        self.submit(service_manager.run_service_action, self._fakes_replaced,
-                    "replace_active_fakes", fake_type=kind, number=number)
+        self.submit_action(service_manager.run_service_action, self._fakes_replaced,
+                           "replace_active_fakes", fake_type=kind, number=number)
 
     def _fakes_replaced(self, r: Any) -> None:
         r = r if isinstance(r, dict) else {}
@@ -789,7 +854,11 @@ class MainWindow(QMainWindow):
             ev.ignore()
             self.hide()
             return
-        self.pool.waitForDone(2000)
+        self._exiting = True  # should_stop воркера тестов увидит отказ и убьёт ps1
+        if not self.pool.waitForDone(3000):
+            # Воркеры не завершились: их колбэки уже не выполнятся, процесс может
+            # задержаться — фиксируем в лог (B2)
+            applog.log("waitForDone timeout on exit: some workers still running")
         super().closeEvent(ev)
 
 
@@ -807,11 +876,14 @@ def main() -> int:
 
     # 3. Автоповышение прав: один UAC-вопрос при старте; при отказе работаем без прав
     if not service_manager.is_admin() and "--no-elevate" not in sys.argv:
+        # Мьютекс отпускаем ДО ShellExecuteW (A3): иначе ребёнок может успеть
+        # стартовать раньше ReleaseHandle и упереться в ERROR_ALREADY_EXISTS
+        _release_mutex(mutex)
         if service_manager.relaunch_as_admin(extra_args=["--no-elevate"]):
-            _release_mutex(mutex)  # отпускаем до выхода — иначе ребёнок упрётся в мьютекс
             applog.log("relaunched elevated")
             return 0
         applog.log("elevation declined — running without admin rights")
+        mutex, _ = _acquire_single_instance()  # UAC отклонён — возвращаем мьютекс
 
     w = MainWindow()
     ag = app.primaryScreen().availableGeometry()
@@ -822,8 +894,14 @@ def main() -> int:
     return code
 
 
+# Глобальный хэндл мьютекса: кнопка «Повысить права» отпускает его перед
+# запуском elevated-копии и возвращает, если UAC отклонён (A3).
+_MUTEX_HANDLE: int | None = None
+
+
 def _acquire_single_instance() -> tuple[int | None, bool]:
     """(хэндл_мьютекса, уже_запущен?). Хэндл держим живым весь срок процесса."""
+    global _MUTEX_HANDLE
     try:
         import ctypes
         kernel32 = ctypes.WinDLL("kernel32", use_last_error=True)
@@ -833,14 +911,23 @@ def _acquire_single_instance() -> tuple[int | None, bool]:
         if not handle:
             return None, False
         if ctypes.get_last_error() == 183:  # ERROR_ALREADY_EXISTS — уже запущен
-            _release_mutex(handle)
+            _close_handle(handle)
             return None, True
+        _MUTEX_HANDLE = handle
         return handle, False
     except Exception:
         return None, False  # не смогли проверить — не мешаем запуску
 
 
-def _release_mutex(handle: int | None) -> None:
+def _release_mutex(handle: int | None = None) -> None:
+    """Закрывает хэндл (по аргументу или последний сохранённый) и обнуляет глобальный."""
+    global _MUTEX_HANDLE
+    h = handle if handle is not None else _MUTEX_HANDLE
+    _MUTEX_HANDLE = None
+    _close_handle(h)
+
+
+def _close_handle(handle: int | None) -> None:
     if handle:
         try:
             import ctypes

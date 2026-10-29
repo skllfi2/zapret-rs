@@ -10,7 +10,15 @@ import win32serviceutil
 from i18n import t
 
 from .misc import is_admin
-from .paths import BIN_DIR, LISTS_DIR, ORIG_DIR, SERVICE_DISPLAY, SERVICE_NAME, STRATEGY_FILE
+from .paths import (
+    BIN_DIR,
+    LEGACY_STRATEGY_FILE,
+    LISTS_DIR,
+    ORIG_DIR,
+    SERVICE_DISPLAY,
+    SERVICE_NAME,
+    STRATEGY_FILE,
+)
 from .scm import is_running, query_status
 from .settings import game_filter_status
 
@@ -23,6 +31,13 @@ def list_strategies() -> list[str]:
                 if f.lower().endswith(".bat") and not f.lower().startswith("service")]
     except OSError:
         return []
+
+def default_strategy() -> str | None:
+    """Стратегия по умолчанию: general, иначе первая из списка."""
+    all_strats = list_strategies()
+    if "general" in all_strats:
+        return "general"
+    return all_strats[0] if all_strats else None
 
 def _game_filter_ranges() -> tuple[str, str]:
     """Эффективные диапазоны как в :game_switch_status: для выключенного направления — 12
@@ -80,6 +95,16 @@ def parse_strategy_args(strategy_id: str) -> tuple[list[str] | None, str | None]
         return shlex.split(args_str, posix=False), None
     return None, t("sm.strategy_no_winws", s=strategy_id)
 
+def format_exe_args(args: list[str]) -> str:
+    """Строка аргументов winws.exe для binPath службы: аргументы с пробелами — в кавычках."""
+    return " ".join(f'"{a}"' if (" " in a and not (a.startswith('"') and a.endswith('"'))) else a
+                    for a in args)
+
+def _win32_error_code(e: Exception) -> int | None:
+    """Код Win32 у pywintypes.error (например 1056 = служба уже запущена)."""
+    code = getattr(e, "winerror", None)
+    return code if isinstance(code, int) else None
+
 def apply_strategy(strategy_id: str, restart: bool = True) -> dict:
     """Применяет стратегию к службе zapret: пересоздаёт binPath (exeName+exeArgs)
     и перезапускает службу. Требует прав администратора."""
@@ -90,50 +115,68 @@ def apply_strategy(strategy_id: str, restart: bool = True) -> dict:
         return {"ok": False, "strategy": strategy_id,
                 "service": t("sm.apply_no_admin")}
     exe = os.path.join(BIN_DIR, "winws.exe")
-    exe_args = " ".join(f'"{a}"' if (" " in a and not (a.startswith('"') and a.endswith('"'))) else a
-                        for a in args)
+    exe_args = format_exe_args(args)
     try:
         exists = win32serviceutil.QueryServiceStatus(SERVICE_NAME) is not None
     except Exception:
         exists = False
     try:
-        if exists:
+        if exists and is_running():
+            # Службу нельзя менять на лету — сначала честная остановка с ожиданием
+            # (отказ до ChangeServiceConfig: конфигурация не меняется при проблемах)
             try:
-                if is_running():
-                    win32serviceutil.StopService(SERVICE_NAME)
-                    for _ in range(20):  # ждём остановки, до 10 с
-                        time.sleep(0.5)
-                        if query_status() == "Stopped":
-                            break
-            except Exception:
-                pass  # служба и так остановлена
-            win32serviceutil.ChangeServiceConfig(SERVICE_NAME, exeName=exe, exeArgs=exe_args,
+                win32serviceutil.StopService(SERVICE_NAME)
+            except Exception as e:
+                if _win32_error_code(e) != 1062:  # 1062 = уже остановлена
+                    return {"ok": False, "strategy": strategy_id,
+                            "service": t("sm.stop_failed", e=str(e))}
+            for _ in range(20):  # ждём остановки, до 10 с
+                time.sleep(0.5)
+                if query_status() == "Stopped":
+                    break
+            else:
+                return {"ok": False, "strategy": strategy_id,
+                        "service": t("sm.stop_failed", e=query_status())}
+        if exists:
+            # pythonClassString=None: pywin32 по умолчанию пропускает InstallPythonClassString
+            win32serviceutil.ChangeServiceConfig(None, SERVICE_NAME, exeName=exe, exeArgs=exe_args,
                                                  startType=win32service.SERVICE_AUTO_START,
                                                  description=f"zapret ({strategy_id})")
         else:
-            win32serviceutil.InstallService(exe, SERVICE_NAME, SERVICE_DISPLAY,
+            win32serviceutil.InstallService(None, SERVICE_NAME, SERVICE_DISPLAY,
                                             startType=win32service.SERVICE_AUTO_START,
-                                            exeArgs=exe_args, description=f"zapret ({strategy_id})")
+                                            exeName=exe, exeArgs=exe_args,
+                                            description=f"zapret ({strategy_id})")
         started = ""
         if restart:
-            win32serviceutil.StartService(SERVICE_NAME)
-            started = t("sm.service_started_suffix")
+            try:
+                win32serviceutil.StartService(SERVICE_NAME)
+                started = t("sm.service_started_suffix")
+            except Exception as e:
+                # 1056 = уже запущена: конфигурация применена — это успех, а не ошибка
+                if _win32_error_code(e) != 1056:
+                    raise
+                started = t("sm.service_started_suffix")
         # Запоминаем выбранную стратегию для отображения в статусе
         try:
+            os.makedirs(os.path.dirname(STRATEGY_FILE), exist_ok=True)
             with open(STRATEGY_FILE, "w", encoding="utf-8") as f:
                 f.write(strategy_id)
-        except OSError:
-            pass
+        except OSError as e:
+            return {"ok": False, "strategy": strategy_id,
+                    "service": t("sm.strategy_write_failed", e=str(e))}
         return {"ok": True, "strategy": strategy_id, "args_count": len(args),
                 "service": t("sm.strategy_applied", s=strategy_id, n=len(args), started=started)}
     except Exception as e:
         return {"ok": False, "strategy": strategy_id, "service": str(e)}
 
 def current_strategy() -> str | None:
-    """Последняя применённая стратегия (файл .strategy рядом с приложением)."""
-    p = STRATEGY_FILE
-    try:
-        with open(p, encoding="utf-8") as f:
-            return f.read().strip()
-    except OSError:
-        return None
+    """Последняя применённая стратегия: .strategy в %LOCALAPPDATA%\\zapret-simple,
+    для старых версий — fallback на файл рядом с приложением."""
+    for p in (STRATEGY_FILE, LEGACY_STRATEGY_FILE):
+        try:
+            with open(p, encoding="utf-8") as f:
+                return f.read().strip()
+        except OSError:
+            continue
+    return None

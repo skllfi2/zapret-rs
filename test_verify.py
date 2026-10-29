@@ -1,10 +1,12 @@
 # test_verify.py — офлайн-проверки zapret-simple без запуска окна (структура «только PySide6»)
+import glob
 import os
-import subprocess
 import sys
 
-ORIG = r"C:\Users\dexox\Pictures\zapret-discord-youtube"
-SIMPLE = r"F:\Development\Dev\mydev\zapret-simple"
+# C2: пути не захардкожены — SIMPLE = каталог этого файла, ORIG = как у самого приложения
+SIMPLE = os.path.dirname(os.path.abspath(__file__))
+sys.path.insert(0, SIMPLE)
+from zapret_core.paths import BIN_DIR, ORIG_DIR  # noqa: E402
 
 errors = []
 
@@ -27,13 +29,17 @@ for f in ["paths.py", "scm.py", "winws.py", "lists.py", "settings.py", "updates.
           "router.py", "applog.py"]:
     check(os.path.isfile(os.path.join(SIMPLE, "zapret_core", f)), f"zapret_core/{f} существует")
 
-print("\n=== Оригинальная копия zapret ===")
-check(os.path.isfile(os.path.join(ORIG, "service.bat")), "service.bat есть в оригинальной копии")
-check(os.path.isfile(os.path.join(ORIG, "general.bat")), "general.bat есть в оригинальной копии")
+print(f"\n=== Оригинальная копия zapret ({ORIG_DIR}) ===")
+check(os.path.isfile(os.path.join(ORIG_DIR, "service.bat")), "service.bat есть в оригинальной копии")
+check(os.path.isfile(os.path.join(ORIG_DIR, "general.bat")), "general.bat есть в оригинальной копии")
+# Самое хрупкое: без winws.exe и payload-файлов служба и тесты неработоспособны
+check(os.path.isfile(os.path.join(BIN_DIR, "winws.exe")), "bin\\winws.exe есть")
+payloads = glob.glob(os.path.join(BIN_DIR, "*.bin"))
+check(len(payloads) >= 1, f"payload-файлы bin\\*.bin есть ({len(payloads)} шт.)")
 
-print("\n=== Python 3.15+ ===")
-res = subprocess.run([r"C:\Users\dexox\AppData\Local\Python\pythoncore-3.15-64\python.exe", "--version"], capture_output=True, text=True, check=False)
-check(res.stdout.strip().startswith("Python 3.15"), f"Python 3.15.x (фактически: {res.stdout.strip()})")
+print(f"\n=== Python {sys.version_info.major}.{sys.version_info.minor}+ ===")
+check(sys.version_info >= (3, 12),
+      f"Python {sys.version_info.major}.{sys.version_info.minor}.x (текущий интерпретатор)")
 
 print("\n=== Синтаксис исходников ===")
 for f in ["zapret_pyside.py", "service_manager.py", "i18n.py"] + [

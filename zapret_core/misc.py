@@ -10,6 +10,21 @@ from .lists import load_user_lists
 from .paths import ORIG_DIR
 
 
+def decode_output(data: bytes | str | None) -> str:
+    """Декодирование вывода системных утилит (sc/netsh/tasklist).
+    На русской локали консольные утилиты печатают OEM cp866, а text=True
+    декодирует их через ANSI cp1251 — отсюда кракозябры. Пробуем utf-8, затем cp866."""
+    if data is None:
+        return ""
+    if isinstance(data, str):
+        return data
+    if not isinstance(data, (bytes, bytearray)):
+        return str(data)  # не-байты (моки в тестах) — как есть
+    try:
+        return data.decode("utf-8")
+    except UnicodeDecodeError:
+        return data.decode("cp866", errors="replace")
+
 def is_admin() -> bool:
     try:
         return bool(ctypes.windll.shell32.IsUserAnAdmin())
@@ -33,7 +48,8 @@ def clear_discord() -> dict:
     import shutil
     killed = []
     for p in ["Discord.exe", "DiscordCanary.exe", "DiscordPTB.exe"]:
-        r = subprocess.run(["taskkill", "/IM", p, "/F"], capture_output=True)
+        r = subprocess.run(["taskkill", "/IM", p, "/F"], capture_output=True,
+                           creationflags=0x08000000)
         if r.returncode == 0:
             killed.append(p)
     removed = []

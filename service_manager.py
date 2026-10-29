@@ -13,7 +13,7 @@ import win32serviceutil  # noqa: F401
 
 from zapret_core.paths import (ORIG_DIR, BIN_DIR, LISTS_DIR, SERVICE_NAME,
                                SERVICE_DISPLAY, APP_DIR, STRATEGY_FILE,
-                               get_bin_path, _detect_orig_dir)
+                               LEGACY_STRATEGY_FILE, get_bin_path, _detect_orig_dir)
 from zapret_core.scm import (install_service, uninstall_service, start_service,
                              stop_service, set_autostart, SERVICE_STATES,
                              query_status, is_running)
@@ -28,6 +28,7 @@ from zapret_core.settings import (game_filter_status, game_filter_label,
 from zapret_core.updates import check_updates
 from zapret_core.strategies import (list_strategies, parse_strategy_args,
                                     apply_strategy, current_strategy,
+                                    default_strategy, format_exe_args,
                                     _game_filter_ranges)
 from zapret_core.menu import menu_status
 from zapret_core.diagnostics import (tcp_timestamps, run_diagnostics,
@@ -35,7 +36,7 @@ from zapret_core.diagnostics import (tcp_timestamps, run_diagnostics,
 from zapret_core.tests_runner import (tests_prerequisites, run_tests,
                                       _latest_test_result, best_strategy)
 from zapret_core.misc import (is_admin, admin_use, hidden_cmd, clear_discord,
-                              relaunch_as_admin)
+                              relaunch_as_admin, decode_output)
 from zapret_core.router import run_service_action
 
 __all__ = [n for n in dir() if not n.startswith("__")]

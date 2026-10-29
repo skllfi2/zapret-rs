@@ -3,8 +3,10 @@
 # запуск того же скрипта, ответы на его Read-Host (тип теста, режим) пишутся в stdin,
 # строки вывода отдаются колбэку on_line для живого показа в UI.
 import os
+import queue
 import shutil
 import subprocess
+import threading
 import time
 from collections.abc import Callable
 
@@ -49,11 +51,13 @@ def _latest_test_result() -> str | None:
         return None
 
 def run_tests(on_line: Callable | None = None, test_type: int = 1, mode: int = 1,
-              selection: list[str] | None = None, timeout: int = 1800) -> dict:
+              selection: list[str] | None = None, timeout: int = 1800,
+              should_stop: Callable[[], bool] | None = None) -> dict:
     """Запуск оригинального utils\test zapret.ps1.
     test_type: 1=Standard (HTTP/ping), 2=DPI checkers; mode: 1=All configs, 2=Selected;
     selection — номер конфига при mode=2 (третий Read-Host в оригинале).
-    on_line(str) — колбэк на каждую строку вывода (живой прогресс в UI)."""
+    on_line(str) — колбэк на каждую строку вывода (живой прогресс в UI).
+    should_stop() — колбэк досрочной остановки (закрытие окна UI)."""
     problems = tests_prerequisites()
     if problems:
         return {"ok": False, "service": t("tests.not_started", p=" | ".join(problems)),
@@ -82,13 +86,44 @@ def run_tests(on_line: Callable | None = None, test_type: int = 1, mode: int = 1
         stdin.flush()
     except (BrokenPipeError, OSError):
         pass
+    # Reader-поток: блокирующее чтение stdout вынесено из главного цикла —
+    # иначе при «тихом» зависшем процессе (нет строк, нет EOF) main thread
+    # навсегда застревает в `for raw in stdout` и не может ни обработать
+    # should_stop, ни сработать по таймауту.
+    q: queue.Queue[str | None] = queue.Queue()
+
+    def _reader() -> None:
+        try:
+            for raw in stdout:
+                q.put(raw)
+        except (OSError, ValueError):
+            pass
+        finally:
+            q.put(None)  # сентинел: поток закончил чтение
+
+    reader = threading.Thread(target=_reader, daemon=True)
+    reader.start()
     deadline = started + timeout
+    stopped = False
     try:
-        for raw in stdout:
+        while True:
+            if should_stop is not None and should_stop():
+                stopped = True
+                p.kill()
+                lines.append(t("tests.stopped"))
+                break
             if time.time() > deadline:
                 p.kill()
                 lines.append(t("tests.timeout"))
                 break
+            try:
+                raw = q.get(timeout=0.25)
+            except queue.Empty:
+                if p.poll() is not None and q.empty():
+                    break  # процесс завершил чтение — поток скоро положит сентинела
+                continue
+            if raw is None:
+                break  # сентинел reader-потока: EOF
             line = raw.rstrip("\r\n")
             lines.append(line)
             if on_line:
@@ -119,10 +154,13 @@ def run_tests(on_line: Callable | None = None, test_type: int = 1, mode: int = 1
             pass
     joined = "\n".join(lines)
     has_error = "[ERROR]" in joined
-    summary = (t("tests.done", t=int(time.time() - started), tail=tail)
-               if not has_error else t("tests.aborted"))
-    return {"ok": not has_error, "service": summary, "stdout": lines[-60:],
-            "results_file": res_file}
+    if stopped:
+        summary = t("tests.stopped")
+    else:
+        summary = (t("tests.done", t=int(time.time() - started), tail=tail)
+                   if not has_error else t("tests.aborted"))
+    return {"ok": (not has_error) and not stopped, "service": summary,
+            "stdout": lines[-60:], "results_file": res_file}
 
 def best_strategy() -> dict:
     """Лучшая стратегия из последнего файла результатов тестов (строка

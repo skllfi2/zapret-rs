@@ -34,7 +34,8 @@ update.bat                # проверка обновлений (service_manag
 
 Зависимости: `pip install -r requirements.txt` (pywin32, PySide6-Essentials).
 PySide6 ставится только `Essentials` (~215 МБ) — метапакет с `Addons` (~100 МБ) в проекте
-не нужен.
+не нужен. Для разработки (линт, типизация, покрытие, сборка exe):
+`pip install -r requirements-dev.txt`.
 
 ### Надёжность
 
@@ -91,11 +92,17 @@ Update Hosts / Check for Updates), `:: TOOLS` (Run Diagnostics / Run Tests).
 ## Тесты и качество кода
 
 ```bat
-python -m unittest discover -s tests -v   # 188 тестов: ядро, i18n, UI/tray (offscreen), smoke-скрипт
+python -m unittest discover -s tests -v   # 202 теста: ядро, i18n, UI/tray (offscreen), smoke-скрипт
 python test_verify.py                     # офлайн-проверки структуры без запуска окна
 python -m ruff check .                    # линт (конфиг в ruff.toml) — 0 ошибок
 python -m mypy                            # типизация (mypy.ini) — 0 ошибок
 ```
+
+Команды выше должны выполняться **интерпретатором с установленными зависимостями**
+(`pip install -r requirements-dev.txt`): голый PATH-`python` без пакетов упадёт на импортах.
+Если PATH-питон не тот — подставь свой: `C:\...\pythoncore-3.15-64\python.exe -m ruff check .`
+(тот же принцип — в `.bat`-скриптах и хуке `hooks/pre-commit`: захардкоженный путь →
+`py -3.15` → `python`).
 
 Сигнатуры всех функций `zapret_core` типизированы (аннотации параметров и возвратов).
 
@@ -113,9 +120,9 @@ build_exe.bat             # или: python build_exe.py
 ```
 
 Результат — `dist\zapret-simple.exe` (onefile, windowed, ~39 МБ): конечному пользователю
-не нужны Python и pip. В frozen-режиме `.strategy` хранится рядом с exe (каталог
-определяется через `sys.executable`, а не временный `_MEIPASS`). PyInstaller-артефакты
-(`dist/`, `build/`, `*.spec`) в `.gitignore`.
+не нужны Python и pip. Выбранная стратегия хранится в `%LOCALAPPDATA%\zapret-simple\.strategy`
+(каталог приложения может быть read-only; для старых версий — fallback на файл рядом с exe).
+PyInstaller-артефакты (`dist/`, `build/`, `*.spec`) в `.gitignore`.
 
 ## Права безопасности в коде
 

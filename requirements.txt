@@ -1,4 +1,7 @@
-pywin32
+# Runtime-зависимости (dev-инструменты — в requirements-dev.txt).
+# pywin32 пинен: API SCM-функций (ChangeServiceConfig/InstallService/EnumServicesStatus)
+# проверен интроспекцией именно на 312.
+pywin32==312
 # Единственный десктопный UI (zapret_pyside.py) — только PySide6 Essentials, ~215 МБ.
 # Метапакет из основной ветки PySide6 и не нужен: Addons (~100 МБ) тут не применяются.
 PySide6-Essentials==6.12.0

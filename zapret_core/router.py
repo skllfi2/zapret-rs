@@ -5,9 +5,9 @@ from .diagnostics import remove_conflicts, run_diagnostics
 from .lists import ipset_update, load_user_lists, toggle_ipset, update_hosts
 from .menu import menu_status
 from .misc import admin_use, clear_discord, relaunch_as_admin
-from .scm import install_service, query_status, start_service, stop_service, uninstall_service
+from .scm import install_service, query_status, start_service, stop_service, uninstall_service  # noqa: F401 (точка патчинга тестов)
 from .settings import game_filter_status, set_game_filter, toggle_check_updates
-from .strategies import apply_strategy
+from .strategies import apply_strategy, current_strategy, default_strategy
 from .tests_runner import best_strategy, run_tests, tests_prerequisites
 from .updates import check_updates
 from .winws import list_fakes, payloads_status, replace_fakes, restore_payloads, winws_is_running
@@ -17,8 +17,12 @@ def run_service_action(action: str = "status_zapret", arg: str = "", **kwargs) -
     """Основной маршрутизатор — заменяет service.bat полностью.
     kwargs пробрасываются в функцию (например, fake_type/number для replace_active_fakes)."""
     if action == "service_install":
-        r = install_service()
-        return {"ok": r[0], "service": r[1]}
+        # Паритет с оригинальным :service_install (service.bat:354-358):
+        # stop -> create binPath="winws.exe" !ARGS! start=auto -> start.
+        sid = current_strategy() or default_strategy()
+        if not sid:
+            return {"ok": False, "service": t("sm.no_strategies")}
+        return apply_strategy(sid, restart=True)
     if action == "service_remove":
         r = uninstall_service()
         return {"ok": r[0], "service": r[1]}

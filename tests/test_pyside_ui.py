@@ -130,21 +130,50 @@ class TestPySideUI(unittest.TestCase):
         self.assertIn("no-results", self.win.output.toPlainText())
 
     def test_status_updates_via_threadpool(self):
-        # Статус читается в фоне через QThreadPool и доставляется сигналом
-        import time
-        for _ in range(40):
-            self.app.processEvents()
-            time.sleep(0.02)
-            if self.win.status_text.text() not in (self.i18n.t("ui.status_unknown"), ""):
-                break
-        self.assertNotEqual(self.win.status_text.text(), "")
+        # B9: честная проверка — мокаем _read_status с конкретным значением и ждём
+        # именно его (старый assertNotEqual(text, "") проходил и при сломанном refresh)
+        import unittest.mock as mock
+        self.win._busy = False
+        with mock.patch.object(self.win, "_read_status",
+                               return_value={"status": "MOCK-STATUS-42", "running": True,
+                                             "payloads": {"ok": True, "missing": []}}):
+            self.win.refresh()
+            for _ in range(60):
+                self.app.processEvents()
+                time.sleep(0.02)
+                if self.win.status_text.text() == "MOCK-STATUS-42":
+                    break
+        self.assertEqual(self.win.status_text.text(), "MOCK-STATUS-42")
+        # running=True -> зелёный кружок в шапке
+        self.assertIn("#5ee87f", self.win.dot.styleSheet())
 
     def test_no_widget_access_from_worker_threads(self):
-        # Стратегия Qt: работа в потоке, результат — через сигнал в главный поток
-        src = _read_src()
-        self.assertIn("QThreadPool", src)
-        self.assertIn("Signal(", src)
-        self.assertNotIn("root.after(0", src)  # остаток tkinter-подхода
+        # B9: реальный контроль — add_out вызывается только из главного потока.
+        # Воркер эмитит через сигнал; спай на add_out ловит поток каждого вызова.
+        import threading
+        import unittest.mock as mock
+        main_thread = threading.main_thread()
+        seen_threads = []
+        orig_add_out = self.win.add_out
+
+        def spy_add_out(text, level="info"):
+            seen_threads.append(threading.current_thread())
+            return orig_add_out(text, level)
+
+        self.win.output.clear()
+        with mock.patch.object(self.win, "add_out", spy_add_out):
+            w = self.z.Worker(lambda: self.win._emit_line("[OK] из-воркера"))
+            self.win.pool.start(w)
+            for _ in range(60):
+                self.app.processEvents()
+                time.sleep(0.02)
+                if "из-воркера" in self.win.output.toPlainText():
+                    break
+        self.assertIn("из-воркера", self.win.output.toPlainText())
+        self.assertTrue(seen_threads, "add_out не вызывался вовсе")
+        for th in seen_threads:
+            self.assertIs(th, main_thread,
+                          f"add_out вызван из фонового потока {th.name}")
 
 
 @unittest.skipUnless(HAS_PYSIDE, "PySide6 не установлен")
@@ -369,9 +398,21 @@ class TestPySideActions(unittest.TestCase):
             self.assertIn(line, txt)
 
     def test_emit_line_crosses_to_ui(self):
+        # B9: эмитим из НАСТОЯЩЕГО фонового потока (не из главного) —
+        # queued-доставка сигнала в главный поток работает и без processEvents в потоке
+        import threading
         self.win.output.clear()
-        self.win._emit_line("[OK] из-потока")
+        worker_thread = {}
+
+        def emit_from_thread():
+            worker_thread["name"] = threading.current_thread().name
+            self.win._emit_line("[OK] из-потока")
+
+        th = threading.Thread(target=emit_from_thread, name="emit-worker")
+        th.start()
+        th.join()
         self.assertTrue(self._wait(lambda: "из-потока" in self.win.output.toPlainText()))
+        self.assertNotEqual(worker_thread.get("name"), threading.current_thread().name)
 
     def test_tests_done_prints_summary(self):
         self.win.output.clear()

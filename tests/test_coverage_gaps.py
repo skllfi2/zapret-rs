@@ -67,6 +67,12 @@ class TestApplyStrategy(unittest.TestCase):
         change.assert_called_once()
         start.assert_called_once()
         install.assert_not_called()
+        # A1: первый аргумент — pythonClassString (None), имя службы — вторым
+        args, kwargs = change.call_args
+        self.assertIsNone(args[0])
+        self.assertEqual(args[1], self.strat.SERVICE_NAME)
+        self.assertTrue(kwargs["exeName"].endswith("winws.exe"))
+        self.assertIn("--wf-tcp=80,443", kwargs["exeArgs"])
         with open(self.sfile, encoding="utf-8") as f:
             self.assertEqual(f.read(), "general")  # .strategy запомнен
 
@@ -79,6 +85,12 @@ class TestApplyStrategy(unittest.TestCase):
         self.assertTrue(r["ok"], r)
         install.assert_called_once()
         change.assert_not_called()
+        # A2: pythonClassString=None, служба/отображение — 2-й/3-й, exeName — kwarg
+        args, kwargs = install.call_args
+        self.assertIsNone(args[0])
+        self.assertEqual(args[1], self.strat.SERVICE_NAME)
+        self.assertEqual(args[2], self.strat.SERVICE_DISPLAY)
+        self.assertTrue(kwargs["exeName"].endswith("winws.exe"))
 
     def test_apply_stops_running_service_first(self):
         with self._base_patches(exists=True, running=True), \
@@ -88,6 +100,35 @@ class TestApplyStrategy(unittest.TestCase):
         self.assertTrue(r["ok"], r)
         stop.assert_called_once()
         change.assert_called_once()
+
+    def test_apply_refuses_when_stop_fails(self):
+        # D2: StopService упал (не 1062) — отказ ДО ChangeServiceConfig, конфиг не тронут
+        with self._base_patches(exists=True, running=True), \
+             mock.patch("win32serviceutil.StopService",
+                        side_effect=OSError("access denied")), \
+             mock.patch("win32serviceutil.ChangeServiceConfig") as change:
+            r = self.strat.apply_strategy("general")
+        self.assertFalse(r["ok"])
+        change.assert_not_called()
+
+    def test_apply_refuses_when_service_wont_stop(self):
+        # D2: за 10 с не остановилась — отказ до ChangeServiceConfig
+        with self._base_patches(exists=True, running=True), \
+             mock.patch.object(self.strat, "query_status", return_value="Running"), \
+             mock.patch("win32serviceutil.ChangeServiceConfig") as change:
+            r = self.strat.apply_strategy("general")
+        self.assertFalse(r["ok"])
+        change.assert_not_called()
+
+    def test_apply_treats_1056_start_as_success(self):
+        # D2: 1056 = уже запущена — конфиг применён, это успех
+        err = OSError("service already running")
+        err.winerror = 1056
+        with self._base_patches(exists=True), \
+             mock.patch("win32serviceutil.ChangeServiceConfig"), \
+             mock.patch("win32serviceutil.StartService", side_effect=err):
+            r = self.strat.apply_strategy("general")
+        self.assertTrue(r["ok"], r)
 
     def test_apply_without_restart_skips_start(self):
         with self._base_patches(exists=True), \
@@ -154,13 +195,25 @@ class TestApplyStrategy(unittest.TestCase):
         self.assertEqual(err, "нет доступа")
 
     def test_current_strategy_empty_and_missing(self):
+        # B8: читаем %LOCALAPPDATA%\.strategy, при отсутствии — legacy рядом с приложением
         st = self.strat
         with open(self.sfile, "w", encoding="utf-8"):
             pass
-        with mock.patch.object(st, "STRATEGY_FILE", self.sfile):
+        with mock.patch.object(st, "STRATEGY_FILE", self.sfile), \
+             mock.patch.object(st, "LEGACY_STRATEGY_FILE", os.path.join(self.d, "gone")):
             self.assertEqual(st.current_strategy(), "")
-        with mock.patch.object(st, "STRATEGY_FILE", os.path.join(self.d, "gone")):
+        with mock.patch.object(st, "STRATEGY_FILE", os.path.join(self.d, "gone")), \
+             mock.patch.object(st, "LEGACY_STRATEGY_FILE", os.path.join(self.d, "gone2")):
             self.assertIsNone(st.current_strategy())
+
+    def test_current_strategy_falls_back_to_legacy(self):
+        st = self.strat
+        legacy = os.path.join(self.d, "legacy.strategy")
+        with open(legacy, "w", encoding="utf-8") as f:
+            f.write("legacy-bat")
+        with mock.patch.object(st, "STRATEGY_FILE", os.path.join(self.d, "gone")), \
+             mock.patch.object(st, "LEGACY_STRATEGY_FILE", legacy):
+            self.assertEqual(st.current_strategy(), "legacy-bat")
 
 
 class TestMiscGaps(unittest.TestCase):
@@ -441,6 +494,17 @@ class TestRunTestsGaps(unittest.TestCase):
         def kill(self):
             self.killed = True
 
+        def poll(self):
+            return -1 if self.killed else None
+
+    class _SilentHangStdout:
+        """Молча зависший процесс: ни строк, ни EOF — ровно то, что ловил B3."""
+        def __iter__(self):
+            return self
+
+        def __next__(self):
+            time.sleep(3600)  # блокировка читающего потока (daemon — не держит процесс)
+
     def setUp(self):
         from zapret_core import tests_runner as tr
         self.tr = tr
@@ -497,6 +561,36 @@ class TestRunTestsGaps(unittest.TestCase):
         self.assertTrue(proc.killed)
         import i18n
         self.assertIn(i18n.t("tests.timeout"), r["stdout"])
+
+    def test_silent_hang_still_times_out(self):
+        # B3: процесс молчит (нет строк, нет EOF) — таймаут обязан сработать,
+        # а не зависнуть навсегда в блокирующем чтении stdout
+        proc = mock.Mock()
+        proc.stdout = self._SilentHangStdout()
+        proc.stdin = mock.Mock()
+        proc.wait = mock.Mock(return_value=0)
+        proc.poll = mock.Mock(return_value=None)
+        started = time.monotonic()
+        with mock.patch.object(self.tr, "tests_prerequisites", return_value=[]), \
+             mock.patch("subprocess.Popen", return_value=proc), \
+             mock.patch.object(self.tr, "_latest_test_result", return_value=None):
+            r = self.tr.run_tests(timeout=1)
+        self.assertLess(time.monotonic() - started, 10)  # не виснет
+        self.assertTrue(proc.killed)
+        import i18n
+        self.assertIn(i18n.t("tests.timeout"), r["stdout"])
+
+    def test_should_stop_kills_and_reports(self):
+        # B2: закрытие окна UI -> should_stop() -> процесс убит, итог «остановлен»
+        proc = self._Proc(["line"])
+        with mock.patch.object(self.tr, "tests_prerequisites", return_value=[]), \
+             mock.patch("subprocess.Popen", return_value=proc), \
+             mock.patch.object(self.tr, "_latest_test_result", return_value=None):
+            r = self.tr.run_tests(should_stop=lambda: True)
+        self.assertTrue(proc.killed)
+        self.assertFalse(r["ok"])
+        import i18n
+        self.assertIn(i18n.t("tests.stopped"), r["stdout"])
 
     def test_broken_stdin_and_failing_on_line(self):
         proc = self._Proc(["x", "y"], pipe_ok=False)
@@ -615,6 +709,9 @@ class TestRouterDispatch(unittest.TestCase):
         # relaunch_as_admin НИКОГДА не выполняем по-настоящему (реальный UAC)
         st.enter_context(mock.patch.object(router, "relaunch_as_admin", return_value=True))
         st.enter_context(mock.patch.object(router, "tests_prerequisites", return_value=[]))
+        # service_install зовёт стратегии — под моками, без реального ORIG_DIR
+        st.enter_context(mock.patch.object(router, "current_strategy", return_value="general"))
+        st.enter_context(mock.patch.object(router, "default_strategy", return_value="general"))
         return st
 
     def test_every_action_returns_dict(self):
@@ -684,6 +781,34 @@ class TestRouterDispatch(unittest.TestCase):
         self.assertTrue(r["ok"])
         self.assertIn("winws.exe running=True", r["service"])
         self.assertIn("service=Running", r["service"])
+
+    def test_service_install_uses_apply_strategy(self):
+        # B5: «Установить службу» = apply_strategy(текущая/дефолтная, restart=True) —
+        # паритет с :service_install (stop -> create winws.exe+ARGS -> start)
+        from zapret_core import router
+        with mock.patch.object(router, "current_strategy", return_value="prev"), \
+             mock.patch.object(router, "apply_strategy", return_value={"ok": True}) as am:
+            r = router.run_service_action("service_install")
+        self.assertTrue(r["ok"])
+        am.assert_called_once_with("prev", restart=True)
+
+    def test_service_install_falls_back_to_default_strategy(self):
+        from zapret_core import router
+        with mock.patch.object(router, "current_strategy", return_value=None), \
+             mock.patch.object(router, "default_strategy", return_value="general"), \
+             mock.patch.object(router, "apply_strategy", return_value={"ok": True}) as am:
+            r = router.run_service_action("service_install")
+        self.assertTrue(r["ok"])
+        am.assert_called_once_with("general", restart=True)
+
+    def test_service_install_without_strategies_refuses(self):
+        from zapret_core import router
+        with mock.patch.object(router, "current_strategy", return_value=None), \
+             mock.patch.object(router, "default_strategy", return_value=None), \
+             mock.patch.object(router, "apply_strategy") as am:
+            r = router.run_service_action("service_install")
+        self.assertFalse(r["ok"])
+        am.assert_not_called()
 
     def test_relaunch_admin_never_runs_real_uac(self):
         from zapret_core import router

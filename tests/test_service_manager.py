@@ -9,28 +9,71 @@ import unittest.mock as mock
 
 class TestServiceManager(unittest.TestCase):
     def test_install_service(self):
-        # .bat не должен уходить в sc create — install_service обязан отказать до subprocess
+        # Явный .bat не должен уходи��ь в sc create — install_service обязан отказать до subprocess
         with mock.patch("service_manager.subprocess.run") as m:
             from service_manager import install_service
-            ok, msg = install_service()
+            ok, msg = install_service("C:\\zapret\\service.bat")
             self.assertFalse(ok)
             self.assertIn(".bat", msg)
             self.assertFalse(m.called)
-        # А вот настоящий exe уходит в sc create с пробелом после binPath=
+        # Без аргументов: binPath = winws.exe + ARGS текущей стратегии, start=auto
+        # (паритет с оригинальным :service_install: sc create ... start= auto)
         with mock.patch("service_manager.subprocess.run") as m, \
              mock.patch("service_manager.os.path.isfile", return_value=True), \
-             mock.patch("zapret_core.scm.get_bin_path", return_value="C:\\fake\\winws.exe"):
+             mock.patch("zapret_core.scm.BIN_DIR", "C:\\fake\\bin"), \
+             mock.patch("zapret_core.strategies.current_strategy", return_value="general"), \
+             mock.patch("zapret_core.strategies.parse_strategy_args",
+                        return_value=(["--wf-tcp=1", "--file=C:\\fake dir\\a.bin"], None)):
+            m.return_value = mock.Mock(returncode=0, stdout=b"", stderr=b"")
             from service_manager import install_service
-            install_service()
+            ok, msg = install_service()
+            self.assertTrue(ok, msg)
             args = m.call_args[0][0]
             self.assertIn("sc", args)
             self.assertTrue(any(a.startswith("binPath= ") for a in args), args)
+            binpath = next(a for a in args if a.startswith("binPath= "))
+            self.assertIn("winws.exe", binpath)
+            self.assertIn("--wf-tcp=1", binpath)
+            self.assertIn('"--file=C:\\fake dir\\a.bin"', binpath)  # пробелы — в кавычках
+            self.assertIn("auto", args)  # start= auto, как в оригинале
 
     def test_uninstall_service(self):
-        with mock.patch("service_manager.win32serviceutil.RemoveService", return_value=None):
+        # Служба отсутствует в SCM: просто RemoveService + проверка исчезновения
+        with mock.patch("service_manager.win32serviceutil.RemoveService", return_value=None), \
+             mock.patch("service_manager.win32serviceutil.QueryServiceStatus",
+                        side_effect=Exception("does not exist")):
             from service_manager import uninstall_service
             ok, msg = uninstall_service()
-            self.assertTrue(ok)
+            self.assertTrue(ok, msg)
+
+    def test_uninstall_service_stops_running_first(self):
+        # Running-служба: сначала StopService + ожидание Stopped, иначе отказ (B4)
+        import win32service
+        running = (16, win32service.SERVICE_RUNNING, 0, 0, 0, 0, 0)
+        stopped = (16, win32service.SERVICE_STOPPED, 0, 0, 0, 0, 0)
+        with mock.patch("service_manager.win32serviceutil.QueryServiceStatus",
+                        side_effect=[running, stopped, Exception("gone")]), \
+             mock.patch("service_manager.win32serviceutil.StopService", return_value=None) as st, \
+             mock.patch("service_manager.win32serviceutil.RemoveService", return_value=None), \
+             mock.patch("time.sleep"):
+            from service_manager import uninstall_service
+            ok, msg = uninstall_service()
+            self.assertTrue(ok, msg)
+            st.assert_called_once()
+
+    def test_uninstall_service_refuses_when_wont_stop(self):
+        # Служба не останавливается за отведённое время — RemoveService не вызывается
+        import win32service
+        running = (16, win32service.SERVICE_RUNNING, 0, 0, 0, 0, 0)
+        with mock.patch("service_manager.win32serviceutil.QueryServiceStatus",
+                        return_value=running), \
+             mock.patch("service_manager.win32serviceutil.StopService", return_value=None), \
+             mock.patch("service_manager.win32serviceutil.RemoveService") as rm, \
+             mock.patch("time.sleep"):
+            from service_manager import uninstall_service
+            ok, msg = uninstall_service()
+            self.assertFalse(ok)
+            self.assertFalse(rm.called)
 
     def test_query_status(self):
         # QueryServiceStatus возвращает (type, state, ...); state — индекс 1
@@ -291,14 +334,21 @@ class TestServiceManager(unittest.TestCase):
         self.assertEqual(sum(d["counts"].values()), len(d["checks"]))
 
     def test_diagnostics_autofixes_timestamps_like_original(self):
-        # Как в оригинале: выключенные timestamps диагностика включает сама при правах
+        # Как в оригинале: реально выключенные timestamps диагностика включает сама
+        # при правах админа (netsh локализован — парсим по «Метки времени RFC 1323»)
         from service_manager import run_diagnostics
         with mock.patch("service_manager.subprocess.run") as sr:
             def _side(cmd, **kw):
                 r = mock.Mock()
                 r.returncode = 0
-                r.stdout = "        STATE              : 4  RUNNING\n" if cmd[:3] == ["sc", "query", "BFE"] else ""
-                r.stderr = ""
+                if cmd[:3] == ["sc", "query", "BFE"]:
+                    r.stdout = b"        STATE              : 4  RUNNING\n"
+                elif cmd[:2] == ["netsh", "interface"]:
+                    r.stdout = ("Метки времени RFC 1323                 : disabled \n"
+                                ).encode("utf-8")
+                else:
+                    r.stdout = b""
+                r.stderr = b""
                 return r
             sr.side_effect = _side
             with mock.patch("zapret_core.diagnostics.winws_is_running", return_value=True), \
@@ -309,6 +359,54 @@ class TestServiceManager(unittest.TestCase):
         self.assertEqual(ts["level"], "ok")
         import i18n
         self.assertEqual(ts["msg"], i18n.t("diag.ts_enabled"))
+
+    def test_diagnostics_no_autofix_when_timestamps_enabled(self):
+        # Русский netsh с enabled: авто-включения НЕТ — честный ok (B7)
+        from service_manager import run_diagnostics
+        with mock.patch("service_manager.subprocess.run") as sr:
+            def _side(cmd, **kw):
+                r = mock.Mock()
+                r.returncode = 0
+                if cmd[:3] == ["sc", "query", "BFE"]:
+                    r.stdout = b"        STATE              : 4  RUNNING\n"
+                elif cmd[:2] == ["netsh", "interface"]:
+                    r.stdout = ("Метки времени RFC 1323                 : enabled \n"
+                                ).encode("utf-8")
+                else:
+                    r.stdout = b""
+                r.stderr = b""
+                return r
+            sr.side_effect = _side
+            with mock.patch("zapret_core.diagnostics.winws_is_running", return_value=True), \
+                 mock.patch("zapret_core.diagnostics.is_admin", return_value=True), \
+                 mock.patch("zapret_core.diagnostics.tcp_timestamps") as ts_set:
+                d = run_diagnostics()
+        ts = next(c for c in d["checks"] if c["name"] == "TCP timestamps")
+        self.assertEqual(ts["level"], "ok")
+        import i18n
+        self.assertEqual(ts["msg"], i18n.t("diag.ts_ok"))
+        ts_set.assert_not_called()  # ничего не включали
+
+    def test_diagnostics_unknown_timestamps_state_no_autofix(self):
+        # Строку timestamps не удалось распарсить — warn без вмешательства (B7)
+        from service_manager import run_diagnostics
+        with mock.patch("service_manager.subprocess.run") as sr:
+            def _side(cmd, **kw):
+                r = mock.Mock()
+                r.returncode = 0
+                r.stdout = (b"        STATE              : 4  RUNNING\n"
+                            if cmd[:3] == ["sc", "query", "BFE"]
+                            else b"no such global parameters\n")
+                r.stderr = b""
+                return r
+            sr.side_effect = _side
+            with mock.patch("zapret_core.diagnostics.winws_is_running", return_value=True), \
+                 mock.patch("zapret_core.diagnostics.is_admin", return_value=True), \
+                 mock.patch("zapret_core.diagnostics.tcp_timestamps") as ts_set:
+                d = run_diagnostics()
+        ts = next(c for c in d["checks"] if c["name"] == "TCP timestamps")
+        self.assertEqual(ts["level"], "warn")
+        ts_set.assert_not_called()
 
     def test_tests_prerequisites_reports_problems(self):
         # Пре-чеки тестов честно перечисляют проблемы (права/curl/служба)

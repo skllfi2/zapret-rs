@@ -30,27 +30,25 @@ class TestParseArgs(unittest.TestCase):
             smoke_live.parse_args(["--no-such-flag"])
 
 
-class TestDefaultStrategy(unittest.TestCase):
+class TestSelectedStrategy(unittest.TestCase):
+    """_selected_strategy: предыдущая реальная стратегия, иначе дефолт ядра, иначе пусто."""
+
     def test_prefers_previous_strategy(self):
         with mock.patch.object(smoke_live, "list_strategies", return_value=["a", "b"]), \
                 mock.patch.object(smoke_live, "current_strategy", return_value="b"):
-            self.assertEqual(smoke_live.default_strategy(), "b")
+            self.assertEqual(smoke_live._selected_strategy(), "b")
 
-    def test_general_when_no_previous(self):
-        with mock.patch.object(smoke_live, "list_strategies",
-                               return_value=["general (ALT)", "worst"]), \
-                mock.patch.object(smoke_live, "current_strategy", return_value=None):
-            self.assertEqual(smoke_live.default_strategy(), "general (ALT)")
-
-    def test_first_strategy_as_fallback(self):
-        with mock.patch.object(smoke_live, "list_strategies", return_value=["zzz"]), \
-                mock.patch.object(smoke_live, "current_strategy", return_value="gone"):
-            self.assertEqual(smoke_live.default_strategy(), "zzz")
+    def test_core_default_when_no_previous(self):
+        with mock.patch.object(smoke_live, "list_strategies", return_value=["a", "b"]), \
+                mock.patch.object(smoke_live, "current_strategy", return_value=None), \
+                mock.patch.object(smoke_live, "default_strategy", return_value="a"):
+            self.assertEqual(smoke_live._selected_strategy(), "a")
 
     def test_empty_when_no_strategies(self):
         with mock.patch.object(smoke_live, "list_strategies", return_value=[]), \
-                mock.patch.object(smoke_live, "current_strategy", return_value=None):
-            self.assertEqual(smoke_live.default_strategy(), "")
+                mock.patch.object(smoke_live, "current_strategy", return_value=None), \
+                mock.patch.object(smoke_live, "default_strategy", return_value=None):
+            self.assertEqual(smoke_live._selected_strategy(), "")
 
 
 class TestReport(unittest.TestCase):

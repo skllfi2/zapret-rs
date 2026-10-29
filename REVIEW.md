@@ -10,6 +10,43 @@
 
 ---
 
+## Статус: все 19 находок исправлены (29.10.2026)
+
+Гейты после исправлений: **ruff — 0, mypy — 0 (18 файлов), 202 теста — OK, coverage 93%**
+(fail-under 90). Каждая находка закрыта кодом + тестом (новые/переписанные — в
+`tests/test_coverage_gaps.py`, `test_service_manager.py`, `test_core_extra.py`,
+`test_pyside_ui.py`, `test_smoke_live.py`).
+
+| # | Статус | Как закрыто (кратко) |
+|---|--------|----------------------|
+| A1 | ✅ исправлено | `ChangeServiceConfig(None, SERVICE_NAME, ...)`; тест на позиционные аргументы |
+| A2 | ✅ исправлено | `InstallService(None, SERVICE_NAME, SERVICE_DISPLAY, ..., exeName=exe)`; тест на `exeName` |
+| A3 | ✅ исправлено | глобальный `_MUTEX_HANDLE`: в `main` — до `ShellExecuteW` (+re-acquire при отказе UAC); кнопка UI → `_relaunch_admin` с освобождением/возвратом мьютекса и выходом при успехе |
+| A4 | ✅ исправлено | `_sc_service_names()` → `win32service.EnumServicesStatus` через `OpenSCManager(…, SC_MANAGER_ENUMERATE_SERVICE)` + `CloseServiceHandle` |
+| B1 | ✅ исправлено | реестр кнопок + `submit_action` гасит их на время операции; `_tests_running=True` до prereq (снятие при отказе/отмене); `strat_box`/`apply_btn` гасятся при применении |
+| B2 | ✅ исправлено | `closeEvent`: `waitForDone(3000)` с логом таймаута; воркер тестов получает `should_stop=lambda: self._exiting` |
+| B3 | ✅ исправлено | reader-поток + `queue.Queue` с сентинелом, цикл с deadline/`should_stop` через `q.get(timeout=0.25)`; итог `ok=False` при stopped |
+| B4 | ✅ исправлено | `uninstall_service`: StopService + ожидание Stopped (10×0.5 с) → RemoveService → реальная проверка исчезновения |
+| B5 | ✅ исправлено | router `service_install` → `apply_strategy(current/default, restart=True)` (отказ при `sm.no_strategies`); `install_service()` без аргументов → `BIN_DIR\winws.exe` + exeArgs стратегии, binPath в кавычках, `start=auto` |
+| B6 | ✅ исправлено | `decode_output(bytes\|str\|None)` (utf-8 → cp866 fallback) в scm/diagnostics; BFE/tasklist/netsh/sc-delete — байты |
+| B7 | ✅ исправлено | парс по `1323`/`timestamp`/`метк`, значение после `:`; autofix только при явном `disabled`, иначе `diag.ts_unknown` без вмешательства |
+| B8 | ✅ исправлено | `STRATEGY_FILE = %LOCALAPPDATA%\zapret-simple\.strategy` + legacy-fallback чтения; запись с `makedirs`, отказ при ошибке (`sm.strategy_write_failed`) |
+| B9 | ✅ исправлено | 3 слабых теста переписаны честно: мок `_read_status` с конкретным значением; спай потоков `add_out`; `_emit_line` из реального фонового потока |
+| C1 | ✅ исправлено | цепочка «захардкоженный → `py -3.15` (через `where`) → `python`» в `.bat`/хуке (`$PY` без кавычек намеренно); `.gitattributes` (`.bat` CRLF, хуки LF); `.bat` пересохранены в CRLF; README-заметка про интерпретатор |
+| C2 | ✅ исправлено | `SIMPLE` из `__file__`, `ORIG` из `zapret_core.paths.ORIG_DIR`; проверки `bin\winws.exe` и `bin\*.bin`; python-версия из `sys.version_info` |
+| C3 | ✅ исправлено | `requirements-dev.txt` (ruff 0.17.3, mypy 2.4.0, coverage 7.17.0, pyinstaller 6.22.3) + пин `pywin32==312`; упоминание в README |
+| D1 | ✅ исправлено | `taskkill` с `creationflags=0x08000000` |
+| D2 | ✅ исправлено | честный стоп (отказ до ChangeServiceConfig, `sm.stop_failed`); ошибка 1056 при Start = успех (`_win32_error_code`) |
+| D3 | ✅ исправлено | один QMenu/QAction в трей с `setText` при смене языка; иконка не сбрасывается при повторном `_init_tray` |
+| D4 | ✅ исправлено | флаг `_best_pending` → `ui.best_fail` в `_apply_done` (сброс при ранних отказах) |
+| D5 | ✅ исправлено | исправлено ранее (см. таблицу ниже) |
+
+Попутно исправлен настоящий баг, найденный новым тестом A2: в `InstallService` не передавался
+`exeName=exe` (служба ставилась не на winws.exe). Также убран SyntaxWarning `"\."` в docstring
+`current_strategy`.
+
+---
+
 ## A. Критично
 
 ### A1. `apply_strategy` всегда падает: `ChangeServiceConfig()` вызывается не с теми аргументами
@@ -272,9 +309,12 @@ the path» + `pause`; хук → код 1 → **все коммиты блоки
 - Тесты ядра мокают внешний API, но проверяют реальную логику внутри; существенных «ложных»
   тестов, кроме B9, не найдено.
 
-## Приоритетный план исправлений (предложение)
+## Приоритетный план исправлений — выполнен целиком (29.10.2026)
 
 1. **Перед живым smoke**: A1, A2 (иначе шаг 1 смока упадёт по построению), A4+B6+B7 (чтобы
-   диагностика не врала), B4 (иначе шаг 2 «Remove Services → Run Tests» блокируется).
-2. **Следом**: A3 (кнопка UAC), B1, B2, B3 (стабильность UI), B5, B8.
-3. **Затем**: B9 (честные тесты), C1-C3 (воспроизводимость), D1-D5.
+   диагностика не врала), B4 (иначе шаг 2 «Remove Services → Run Tests» блокируется). — ✅
+2. **Следом**: A3 (кнопка UAC), B1, B2, B3 (стабильность UI), B5, B8. — ✅
+3. **Затем**: B9 (честные тесты), C1-C3 (воспроизводимость), D1-D5. — ✅
+
+Осталось рекомендацией (не из находок): живой smoke `smoke_live.bat` для e2e-проверки
+починенных A1/A2/B4/B5 на реальной службе.

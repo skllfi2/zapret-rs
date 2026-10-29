@@ -24,7 +24,13 @@ import win32serviceutil
 from zapret_core.misc import is_admin
 from zapret_core.paths import BIN_DIR, ORIG_DIR, SERVICE_NAME
 from zapret_core.scm import query_status, uninstall_service
-from zapret_core.strategies import apply_strategy, current_strategy, list_strategies, parse_strategy_args
+from zapret_core.strategies import (
+    apply_strategy,
+    current_strategy,
+    default_strategy,
+    list_strategies,
+    parse_strategy_args,
+)
 from zapret_core.tests_runner import best_strategy, run_tests, tests_prerequisites
 from zapret_core.winws import winws_is_running
 
@@ -59,15 +65,14 @@ def _relaunch_elevated() -> bool:
         return False
 
 
-def default_strategy() -> str:
-    """Стратегия по умолчанию: последняя применённая, иначе general, иначе первая."""
+def _selected_strategy() -> str:
+    """Стратегия для smoke: последняя применённая (если она реальная),
+    иначе дефолтная из ядра (general/первая), иначе пусто."""
     known = list_strategies()
     prev = current_strategy()
     if prev in known:
         return prev
-    if "general" in known:
-        return "general"
-    return known[0] if known else ""
+    return default_strategy() or ""
 
 
 def preflight(args: argparse.Namespace) -> str:
@@ -84,7 +89,7 @@ def preflight(args: argparse.Namespace) -> str:
     check(bool(shutil.which("curl")), "curl в PATH (нужен тестам)")
     strategies = list_strategies()
     check(bool(strategies), "стратегии найдены", f"{len(strategies)} шт.")
-    sid = args.strategy or default_strategy()
+    sid = args.strategy or _selected_strategy()
     parsed, err = parse_strategy_args(sid)
     if err is not None or not parsed:
         check(False, "разбор стратегии", err or "в .bat нет строки winws.exe")

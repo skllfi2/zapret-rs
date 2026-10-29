@@ -172,6 +172,18 @@ STRINGS = {
     "sm.strategy_applied": {
         "ru": "Стратегия {s} применена ({n} аргументов){started}",
         "en": "Strategy {s} applied ({n} args){started}"},
+    "sm.stop_failed": {
+        "ru": "Не удалось остановить службу: {e}",
+        "en": "Failed to stop the service: {e}"},
+    "sm.strategy_write_failed": {
+        "ru": "Стратегия применена, но не удалось сохранить выбор: {e}",
+        "en": "Strategy applied, but failed to save the selection: {e}"},
+    "sm.remove_stop_failed": {
+        "ru": "Служба не остановилась за 10 с — удаление отменено",
+        "en": "Service did not stop within 10 s — removal cancelled"},
+    "sm.no_strategies": {
+        "ru": "Не найдено ни одной стратегии (.bat) в каталоге zapret",
+        "en": "No strategies (.bat) found in the zapret directory"},
 
     # ---------- меню-тумблеры ----------
     "sm.bad_game_filter_mode": {
@@ -203,6 +215,9 @@ STRINGS = {
         "en": "TCP timestamps are disabled — run as Administrator to enable "
               "(as in the original: netsh set global timestamps=enabled)"},
     "diag.ts_check_failed": {"ru": "Проверка TCP не удалась: {e}", "en": "TCP check failed: {e}"},
+    "diag.ts_unknown": {
+        "ru": "Не удалось прочитать состояние TCP timestamps ({v}) — не изменяю",
+        "en": "Could not read TCP timestamps state ({v}) — not changing"},
     "diag.adguard_bad": {
         "ru": "Найден процесс Adguard. Adguard может мешать Discord",
         "en": "Adguard process found. Adguard may cause problems with Discord"},
@@ -305,6 +320,7 @@ STRINGS = {
     "tests.results_saved": {"ru": "результаты сохранены", "en": "results saved"},
     "tests.done": {"ru": "Тесты завершены за {t} с{tail}", "en": "Tests finished in {t}s{tail}"},
     "tests.aborted": {"ru": "Тесты прерваны с ошибкой — см. вывод", "en": "Tests aborted with an error — see output"},
+    "tests.stopped": {"ru": "[X] Тесты остановлены пользователем", "en": "[X] Tests stopped by user"},
     "tests.prereq_ok": {"ru": "Условия выполнены — можно запускать", "en": "All conditions met — ready to run"},
     "tests.wont_start": {"ru": "Тесты не запустятся: {p}", "en": "Tests won't start: {p}"},
     "tests.best_none": {

@@ -1,0 +1,9 @@
+# C1: единые окончания строк в рабочем дереве.
+# .bat должны быть CRLF (cmd), sh-хуки — LF (bash); иначе на чистом
+# checkout с core.autocrlf=false хук получает CRLF и не запускается.
+*.bat text eol=crlf
+hooks/* text eol=lf
+*.py text eol=lf
+*.md text eol=lf
+*.txt text eol=lf
+*.toml text eol=lf

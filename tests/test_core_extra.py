@@ -121,21 +121,42 @@ class TestUpdates(unittest.TestCase):
 
 
 class TestDiagnosticsHelpers(unittest.TestCase):
-    def test_sc_service_names_parses_output(self):
+    def test_sc_service_names_via_enum_services_status(self):
+        # A4: имена служб — через win32service (не зависит от локали), sc query не парсим
         from zapret_core import diagnostics as dg
-        with mock.patch("subprocess.run") as sr:
-            sr.return_value = mock.Mock(
-                stdout="SERVICE_NAME: BFE\r\nSERVICE_NAME: WinDivert\r\n")
+        fake_services = [("BFE", "Base Filtering Engine", (16, 4, 0, 0, 0, 0, 0)),
+                         ("WinDivert", "WinDivert", (16, 1, 0, 0, 0, 0, 0))]
+        with mock.patch.object(dg.win32service, "OpenSCManager", return_value="HNDL") as oscm, \
+             mock.patch.object(dg.win32service, "EnumServicesStatus",
+                               return_value=fake_services) as enum, \
+             mock.patch.object(dg.win32service, "CloseServiceHandle") as close:
             names = dg._sc_service_names()
         self.assertEqual(names, ["BFE", "WinDivert"])
+        oscm.assert_called_once()
+        enum.assert_called_once_with("HNDL")
+        close.assert_called_once_with("HNDL")
+
+    def test_sc_service_names_swallows_errors(self):
+        from zapret_core import diagnostics as dg
+        with mock.patch.object(dg.win32service, "OpenSCManager",
+                               side_effect=OSError("access denied")):
+            self.assertEqual(dg._sc_service_names(), [])
 
     def test_tasklist_running(self):
+        # B6: tasklist ловится в байтах (cp866 на русской локали) — decode_output разбирает
         from zapret_core import diagnostics as dg
         with mock.patch("subprocess.run") as sr:
-            sr.return_value = mock.Mock(stdout="AdguardSvc.exe PID 123")
+            sr.return_value = mock.Mock(stdout=b"AdguardSvc.exe PID 123")
             self.assertTrue(dg._tasklist_running("AdguardSvc.exe"))
-            sr.return_value = mock.Mock(stdout="INFO: No tasks")
+            sr.return_value = mock.Mock(stdout=b"INFO: No tasks")
             self.assertFalse(dg._tasklist_running("AdguardSvc.exe"))
+
+    def test_tasklist_running_cp866_image_name(self):
+        # Имя процесса в OEM-кодировке (кириллица в пути) тоже находится
+        from zapret_core import diagnostics as dg
+        with mock.patch("subprocess.run") as sr:
+            sr.return_value = mock.Mock(stdout="Имя.exe PID 1".encode("cp866"))
+            self.assertTrue(dg._tasklist_running("Имя.exe"))
 
     def test_remove_conflicts_refuses_without_admin(self):
         # Без прав — отказ до любого subprocess: ничего не удаляем молча

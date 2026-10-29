@@ -6,9 +6,11 @@ import re
 import subprocess
 import winreg
 
+import win32service
+
 from i18n import t
 
-from .misc import is_admin
+from .misc import decode_output, is_admin
 from .paths import BIN_DIR, ORIG_DIR
 from .winws import winws_is_running
 
@@ -16,8 +18,9 @@ from .winws import winws_is_running
 def tcp_timestamps() -> tuple[bool, str]:
     try:
         res = subprocess.run(["netsh", "int", "tcp", "set", "global", "timestamps=enabled"],
-                             capture_output=True, text=True, errors="replace", creationflags=0x08000000)
-        return res.returncode == 0, "TCP enabled" if res.returncode == 0 else str(res.stderr)
+                             capture_output=True, creationflags=0x08000000)
+        out = decode_output(res.stdout) + decode_output(res.stderr)
+        return res.returncode == 0, "TCP enabled" if res.returncode == 0 else out
     except Exception as e:
         return False, str(e)
 
@@ -26,25 +29,22 @@ def tcp_timestamps() -> tuple[bool, str]:
 # ровно как PrintGreen/PrintYellow/PrintRed в оригинале.
 
 def _sc_service_names() -> list[str]:
-    """Список имён установленных служб (sc query) — как `sc query | findstr` в оригинале."""
+    """Имена установленных служб через EnumServicesStatus — не зависит от локали
+    (sc query на русской Windows печатает «Имя_службы» вместо SERVICE_NAME и в cp866)."""
     try:
-        res = subprocess.run(["sc", "query"], capture_output=True, text=True,
-                             errors="replace", creationflags=0x08000000, timeout=30)
-        names = []
-        for line in (res.stdout or "").splitlines():
-            line = line.strip()
-            if line.upper().startswith("SERVICE_NAME:"):
-                names.append(line.split(":", 1)[1].strip())
-        return names
+        h = win32service.OpenSCManager(None, None, win32service.SC_MANAGER_ENUMERATE_SERVICE)
+        try:
+            return [name for name, _display, _status in win32service.EnumServicesStatus(h)]
+        finally:
+            win32service.CloseServiceHandle(h)
     except Exception:
         return []
 
 def _tasklist_running(image: str) -> bool:
     try:
         res = subprocess.run(["tasklist", "/FI", f"IMAGENAME eq {image}"],
-                             capture_output=True, text=True, errors="replace",
-                             creationflags=0x08000000, timeout=20)
-        return image.lower() in (res.stdout or "").lower()
+                             capture_output=True, creationflags=0x08000000, timeout=20)
+        return image.lower() in decode_output(res.stdout).lower()
     except Exception:
         return False
 
@@ -62,9 +62,9 @@ def run_diagnostics() -> dict:
 
     # Base Filtering Engine
     try:
-        r = subprocess.run(["sc", "query", "BFE"], capture_output=True, text=True,
-                           errors="replace", creationflags=0x08000000, timeout=20)
-        if "RUNNING" in (r.stdout or "").upper():
+        r_bfe = subprocess.run(["sc", "query", "BFE"], capture_output=True,
+                               creationflags=0x08000000, timeout=20)
+        if "RUNNING" in decode_output(r_bfe.stdout).upper():
             checks.append(_check("BFE", "ok", t("diag.bfe_ok")))
         else:
             checks.append(_check("BFE", "bad", t("diag.bfe_bad")))
@@ -93,16 +93,19 @@ def run_diagnostics() -> dict:
     except OSError:
         checks.append(_check("Proxy", "ok", t("diag.proxy_ok")))
 
-    # TCP timestamps — в оригинале: выключены -> авто-включение прямо в диагностике
+    # TCP timestamps — в оригинале: выключены -> авто-включение прямо в диагностике.
+    # netsh локализуется («Метки времени RFC 1323»), поэтому ищем строку по
+    # «1323»/«timestamp»/«метк», а значение берём после двоеточия.
     try:
         r = subprocess.run(["netsh", "interface", "tcp", "show", "global"],
-                           capture_output=True, text=True, errors="replace",
-                           creationflags=0x08000000, timeout=20)
-        out = (r.stdout or "").lower()
-        ts_line = next((ln for ln in out.splitlines() if "timestamp" in ln), "")
-        if "enabled" in ts_line and "dis" not in ts_line:
+                           capture_output=True, creationflags=0x08000000, timeout=20)
+        out = decode_output(r.stdout).lower()
+        ts_line = next((ln for ln in out.splitlines()
+                        if "1323" in ln or "timestamp" in ln or "метк" in ln), "")
+        ts_value = ts_line.split(":", 1)[1].strip() if ":" in ts_line else ""
+        if "enabled" in ts_value and "dis" not in ts_value:
             checks.append(_check("TCP timestamps", "ok", t("diag.ts_ok")))
-        else:
+        elif "disabled" in ts_value:
             if is_admin():
                 checks.append(_check("TCP timestamps", "warn", t("diag.ts_enabling")))
                 ok, msg = tcp_timestamps()
@@ -112,6 +115,9 @@ def run_diagnostics() -> dict:
                     checks[-1] = _check("TCP timestamps", "bad", t("diag.ts_failed", e=msg))
             else:
                 checks.append(_check("TCP timestamps", "warn", t("diag.ts_no_admin")))
+        else:
+            # Строку найти не удалось или значение пустое — не трогаем timestamps
+            checks.append(_check("TCP timestamps", "warn", t("diag.ts_unknown", v=ts_value)))
     except Exception as e:
         checks.append(_check("TCP timestamps", "warn", t("diag.ts_check_failed", e=e)))
 
@@ -290,11 +296,12 @@ def remove_conflicts() -> dict:
                                 "discordfix_zapret", "winws1", "winws2")]
     for svc in targets:
         subprocess.run(["net", "stop", svc], capture_output=True, creationflags=0x08000000, timeout=30)
-        r = subprocess.run(["sc", "delete", svc], capture_output=True, text=True,
-                           errors="replace", creationflags=0x08000000, timeout=30)
+        r = subprocess.run(["sc", "delete", svc], capture_output=True,
+                           creationflags=0x08000000, timeout=30)
         if r.returncode == 0:
             actions.append(f"Removed service: {svc}")
         else:
+            # stdout не декодируем: в UI уходит только факт успеха/отказа (B6)
             actions.append(f"[X] Failed to remove: {svc}")
             ok_all = False
     if not targets:

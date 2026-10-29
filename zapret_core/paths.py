@@ -34,4 +34,8 @@ if getattr(sys, "frozen", False):
     APP_DIR = os.path.dirname(os.path.abspath(sys.executable))
 else:
     APP_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-STRATEGY_FILE = os.path.join(APP_DIR, ".strategy")  # последняя применённая стратегия
+# .strategy в %LOCALAPPDATA%: каталог приложения может быть read-only
+# (Program Files, чужая копия), а %LOCALAPPDATA% пишется всегда.
+STRATEGY_DIR = os.path.join(os.environ.get("LOCALAPPDATA", ""), "zapret-simple")
+STRATEGY_FILE = os.path.join(STRATEGY_DIR, ".strategy")  # последняя применённая стратегия
+LEGACY_STRATEGY_FILE = os.path.join(APP_DIR, ".strategy")  # старое расположение (для чтения)
