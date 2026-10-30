@@ -33,6 +33,9 @@ class TestPySideUI(unittest.TestCase):
         import zapret_pyside as z
         cls.z = z
         cls.i18n = i18n
+        # Язык пользователя до тестов: _switch_lang пишет настоящий
+        # ui_settings.json — восстановим его в tearDownClass
+        cls._orig_lang = i18n.LANG
         # Детерминированный язык: пункты меню сверяются с en-паритетом service.bat
         i18n.set_lang("en")
         cls.QPushButton = QPushButton
@@ -40,11 +43,17 @@ class TestPySideUI(unittest.TestCase):
         cls.QLabel = QLabel
         cls.app = QApplication.instance() or QApplication([])
         cls.win = z.MainWindow()
+        # Окно должно быть показано: isVisible() скрытого окна всегда False,
+        # и проверки видимости панели вывода потеряли бы смысл
+        cls.win.show()
+        cls.app.processEvents()
 
     @classmethod
     def tearDownClass(cls):
         cls.win.close()
-        cls.i18n.set_lang("ru")  # не тащим тестовый язык в остальные тесты
+        # Вернуть и память, и файл настроек на язык пользователя (не тащим
+        # тестовый "en" в остальные тесты и в реальную среду)
+        cls.i18n.save(cls._orig_lang)
 
     def _btn_texts(self):
         return [b.text() for b in self.win.findChildren(self.QPushButton)]
@@ -90,44 +99,99 @@ class TestPySideUI(unittest.TestCase):
         for key in ("ui.out_copy", "ui.out_save", "ui.out_clear", "ui.apply_best"):
             self.assertIn(self.i18n.t(key), texts, f"Кнопка {key} отсутствует")
 
+    def test_output_panel_hidden_by_default_and_toggles(self):
+        # Панель вывода скрыта по умолчанию; кнопка в шапке показывает/прячет
+        self.assertFalse(self.win.out_panel.isVisible(),
+                         "Панель вывода должна быть скрыта по умолчанию")
+        self.assertEqual(self.win.out_toggle.text(), self.i18n.t("ui.out_show"))
+        self.win._toggle_output()
+        self.assertTrue(self.win.out_panel.isVisible())
+        self.assertEqual(self.win.out_toggle.text(), self.i18n.t("ui.out_hide"))
+        self.win._toggle_output()
+        self.assertFalse(self.win.out_panel.isVisible())
+        # _show_output (живой вывод тестов) раскрывает панель и синхронизирует кнопку
+        self.win._show_output()
+        self.assertTrue(self.win.out_panel.isVisible())
+        self.assertEqual(self.win.out_toggle.text(), self.i18n.t("ui.out_hide"))
+        self.win._toggle_output()   # вернуть скрытое состояние
+
+    def test_lang_switch_keeps_output_hidden(self):
+        # Пересборка UI при смене языка сохраняет состояние панели вывода
+        self.assertFalse(self.win._out_visible)
+        old_lang = self.i18n.LANG
+        try:
+            self.win._switch_lang()
+            self.assertNotEqual(self.i18n.LANG, old_lang)
+            self.assertFalse(self.win.out_panel.isVisible())
+            self.assertFalse(self.win._out_visible)
+        finally:
+            # Вернуть язык НУЖНО пересборкой: без неё окно останется на
+            # тестовом языке, а i18n.t — на старом (рассинхрон для следующих тестов)
+            if self.i18n.LANG != old_lang:
+                self.win._switch_lang()
+            self.i18n.save(old_lang)   # и файл ui_settings.json к исходному языку
+            self.assertEqual(self.i18n.LANG, old_lang)
+
     def test_copy_output_to_clipboard(self):
         self.win.output.setPlainText("copy-test-body")
         self.win._copy_output()
         self.assertEqual(self.app.clipboard().text(), "copy-test-body")
 
     def test_best_strategy_applies_to_selector(self):
-        # Мок best_strategy(ok) -> имя попадает в селектор и в вывод.
-        # is_admin=False: Apply останавливается на воротах прав — реальной установки
-        # службы в тестах не происходит.
-        import time
+        # Мок best_strategy(ok) -> имя попадает в селектор; применение — после
+        # подтверждения в диалоге. is_admin=False: Apply останавливается на
+        # воротах прав — реальной установки службы в тестах не происходит.
         import unittest.mock as mock
-        self.win.output.clear()
+        need = self.i18n.t("ui.apply_need_admin")
         with mock.patch("service_manager.best_strategy",
                         return_value={"ok": True, "strategy": "general", "file": "r.txt"}), \
+             mock.patch.object(self.z.QMessageBox, "question",
+                               return_value=self.z.QMessageBox.StandardButton.Yes), \
              mock.patch("service_manager.is_admin", return_value=False):
             self.win.apply_best_strategy()
-        expect = self.i18n.t("ui.best_found", s="general")
-        for _ in range(50):
+            # Ждём ПОЛНОЙ доставки результата воркера (до ворот прав): выйти
+            # раньше — значит оставить воркера стрелять в следующий тест
+            self.assertTrue(self._wait_best_done(
+                lambda: need in self.win.flash.text()), self.win.flash.text())
+        self.assertIn("general", self.win.strat_box.currentText())
+        self.assertIn(need, self.win.flash.text())
+
+    def _wait_best_done(self, cond):
+        import time
+        for _ in range(80):
             self.app.processEvents()
             time.sleep(0.02)
-            if expect in self.win.output.toPlainText():
-                break
-        self.assertIn(expect, self.win.output.toPlainText())
+            if cond():
+                return True
+        return False
+
+    def test_best_strategy_cancel_keeps_selector(self):
+        # Отмена в диалоге подтверждения — стратегия выбрана, но не применяется
+        import unittest.mock as mock
+        with mock.patch("service_manager.best_strategy",
+                        return_value={"ok": True, "strategy": "general", "file": "r.txt"}), \
+             mock.patch.object(self.z.QMessageBox, "question",
+                               return_value=self.z.QMessageBox.StandardButton.No) as quest, \
+             mock.patch("service_manager.is_admin", return_value=True), \
+             mock.patch("service_manager.apply_strategy") as apply_m:
+            self.win.apply_best_strategy()
+            # Довести воркера до вопроса ОБЯЗАТЕЛЬНО (иначе его ok-результат
+            # доставится в следующем тесте и откроет настоящую модалку)
+            self.assertTrue(self._wait_best_done(lambda: quest.called),
+                            "результат best_strategy не доставился")
         self.assertIn("general", self.win.strat_box.currentText())
+        apply_m.assert_not_called()
 
     def test_best_strategy_without_results_warns(self):
-        import time
         import unittest.mock as mock
-        self.win.output.clear()
+        self.win.flash.setText("")   # не доверяем чужому флешу из прошлого теста
         with mock.patch("service_manager.best_strategy",
                         return_value={"ok": False, "strategy": None, "reason": "no-results"}):
             self.win.apply_best_strategy()
-        for _ in range(50):
-            self.app.processEvents()
-            time.sleep(0.02)
-            if "no-results" in self.win.output.toPlainText():
-                break
-        self.assertIn("no-results", self.win.output.toPlainText())
+            self.assertTrue(self._wait_best_done(
+                lambda: "no-results" in self.win.flash.text()),
+                f"флеш не обновился: {self.win.flash.text()!r}")
+        self.assertIn("no-results", self.win.flash.text())
 
     def test_status_updates_via_threadpool(self):
         # B9: честная проверка — мокаем _read_status с конкретным значением и ждём
@@ -224,8 +288,8 @@ class TestPySideActions(unittest.TestCase):
                 self.win._save_output()
             with open(path, encoding="utf-8") as f:
                 self.assertEqual(f.read(), "тело-вывода")
-        self.assertIn(self.i18n.t("ui.out_saved", p=path),
-                      self.win.output.toPlainText())
+        # Результат — флеш-статус в шапке, лог вывода не засоряется
+        self.assertIn(self.i18n.t("ui.out_saved", p=path), self.win.flash.text())
 
     def test_save_output_reports_failure(self):
         import tempfile
@@ -236,9 +300,9 @@ class TestPySideActions(unittest.TestCase):
             with mock.patch.object(self.z.QFileDialog, "getSaveFileName",
                                    return_value=(path, "")):
                 self.win._save_output()
-            txt = self.win.output.toPlainText()
-            self.assertIn("[X]", txt)                       # вывод bad-уровня
-            self.assertIn("out.txt", txt)                   # путь в тексте ошибки
+            prefix = self.i18n.t("ui.out_save_fail", e="").split(":")[0]
+            self.assertIn(prefix, self.win.flash.text())    # bad-статус в шапке
+            self.assertIn("out.txt", self.win.flash.text())  # путь в тексте ошибки
 
     def test_clear_output(self):
         self.win.output.setPlainText("x")
@@ -248,32 +312,26 @@ class TestPySideActions(unittest.TestCase):
     # ---------- Ворота прав на применение стратегии ----------
     def test_apply_strategy_requires_admin(self):
         import unittest.mock as mock
-        self.win.output.clear()
         with mock.patch("service_manager.is_admin", return_value=False), \
              mock.patch("service_manager.apply_strategy") as apply_m:
             self.win.apply_strategy()
-        self.assertIn(self.i18n.t("ui.apply_need_admin"),
-                      self.win.output.toPlainText())
+        self.assertIn(self.i18n.t("ui.apply_need_admin"), self.win.flash.text())
         apply_m.assert_not_called()
 
     def test_apply_strategy_empty_selection(self):
         import unittest.mock as mock
-        self.win.output.clear()
         with mock.patch.object(self.win.strat_box, "currentText", return_value=""):
             self.win.apply_strategy()
-        self.assertIn(self.i18n.t("ui.err_no_strategy"),
-                      self.win.output.toPlainText())
+        self.assertIn(self.i18n.t("ui.err_no_strategy"), self.win.flash.text())
 
     def test_apply_strategy_success_flow(self):
         import unittest.mock as mock
-        self.win.output.clear()
         with mock.patch("service_manager.is_admin", return_value=True), \
              mock.patch("service_manager.apply_strategy",
                         return_value={"ok": True, "service": "применено"}):
             self.win.apply_strategy()
-        ok = self._wait(lambda: "применено" in self.win.output.toPlainText())
-        self.assertTrue(ok, self.win.output.toPlainText())
-        self.assertIn("[OK] применено", self.win.output.toPlainText())
+        ok = self._wait(lambda: "применено" in self.win.flash.text())
+        self.assertTrue(ok, self.win.flash.text())
 
     # ---------- Действия и ветки _action_done ----------
     def test_run_action_dispatch_and_done(self):
@@ -282,61 +340,67 @@ class TestPySideActions(unittest.TestCase):
         with mock.patch("service_manager.run_service_action",
                         return_value={"ok": True, "service": "статус-ок"}):
             self.win.run_action("service_status")
-        self._wait(lambda: "статус-ок" in self.win.output.toPlainText())
-        txt = self.win.output.toPlainText()
-        self.assertIn(">>> service_status", txt)
-        self.assertIn("[OK] статус-ок", txt)
+        self._wait(lambda: "статус-ок" in self.win.flash.text())
+        # Итог — во флеш-статусе; служебные строки ">>> ..." в логе больше нет
+        self.assertIn("статус-ок", self.win.flash.text())
+        self.assertNotIn(">>>", self.win.output.toPlainText())
 
     def test_action_done_branches(self):
         self.win.output.clear()
         self.win._action_done((True, "кортеж"))                       # кортеж
+        self.assertIn("кортеж", self.win.flash.text())
         self.win._action_done({"ok": False, "stderr": b"bytes-error"})  # bytes
+        self.assertIn("bytes-error", self.win.flash.text())
         self.win._action_done({"ok": True, "actions": ["act-1"],
                                "stdout": ["line-1", "line-2"]})        # списки
-        self.win._action_done({"ok": True, "actions": ["act-2"],
-                               "stdout": "строка-вывода"})             # строка не-список
-        self.win._action_done("просто строка")                         # не dict
+        # Списочные результаты — живой вывод: панель показана, строки в логе
+        self.assertTrue(self.win._out_visible)
         txt = self.win.output.toPlainText()
-        self.assertIn("[OK] кортеж", txt)
-        self.assertIn("bytes-error", txt)
         self.assertIn("act-1", txt)
         self.assertIn("line-1", txt)
         self.assertIn("line-2", txt)
-        self.assertIn("act-2", txt)
-        self.assertIn("строка-вывода", txt)
-        self.assertIn("[X] просто строка", txt)
+        self.win.output.clear()
+        self.win._action_done({"ok": True, "actions": ["act-2"],
+                               "stdout": "строка-вывода"})             # строка не-список
+        self.assertIn("act-2", self.win.output.toPlainText())
+        self.assertNotIn("строка-вывода", self.win.output.toPlainText())  # текст — во флеше
+        self.assertIn("строка-вывода", self.win.flash.text())
+        self.win._action_done("просто строка")                         # не dict
+        self.assertIn("просто строка", self.win.flash.text())
 
     def test_set_game_filter_menu_action(self):
         import unittest.mock as mock
-        self.win.output.clear()
         with mock.patch("service_manager.run_service_action",
                         return_value={"ok": True, "service": "gf-ok"}) as m:
             self.win._set_game_filter("tcp")
-        self._wait(lambda: "gf-ok" in self.win.output.toPlainText())
-        self.assertIn("Game Filter -> tcp", self.win.output.toPlainText())
+        self._wait(lambda: "gf-ok" in self.win.flash.text())
+        self.assertIn("gf-ok", self.win.flash.text())
         self.assertTrue(m.called)
 
     # ---------- Тесты (test zapret.ps1) из UI ----------
     def test_run_tests_guard_when_running(self):
-        self.win.output.clear()
         self.win._tests_running = True
         try:
             self.win.run_tests()
-            self.assertIn(self.i18n.t("ui.games_running"),
-                          self.win.output.toPlainText())
+            self.assertIn(self.i18n.t("ui.games_running"), self.win.flash.text())
         finally:
             self.win._tests_running = False
 
     def test_run_tests_prereq_fail(self):
         import unittest.mock as mock
-        self.win.output.clear()
+        warned = []
         with mock.patch("service_manager.run_service_action",
-                        return_value={"ok": False, "problems": ["проблема-1"]}):
+                        return_value={"ok": False, "problems": ["проблема-1"]}), \
+             mock.patch.object(self.z.QMessageBox, "warning",
+                               side_effect=lambda *a: warned.append(a)):
             self.win.run_tests()
-        self._wait(lambda: "проблема-1" in self.win.output.toPlainText())
-        txt = self.win.output.toPlainText()
-        self.assertIn("[X] проблема-1", txt)
-        self.assertIn(self.i18n.t("ui.fix_errors"), txt)
+            # Ждём доставку результата ВНУТРИ with: после выхода мок снят и
+            # настоящий QMessageBox.warning заморозит тест модальным окном
+            self.assertTrue(self._wait(lambda: warned),
+                            "предупреждение о prereq не показано")
+        text = warned[0][2]                                   # текст диалога
+        self.assertIn("проблема-1", text)
+        self.assertIn(self.i18n.t("ui.fix_errors"), text)
 
     def test_run_tests_dialog_reject(self):
         import unittest.mock as mock
@@ -383,9 +447,10 @@ class TestPySideActions(unittest.TestCase):
                         return_value={"ok": True, "service": "тесты-готово",
                                       "stdout": ["строка-теста"]}):
             self.win.run_tests()
-            ok = self._wait(lambda: "тесты-готово" in self.win.output.toPlainText())
-        self.assertTrue(ok, self.win.output.toPlainText())
-        self.assertIn("строка-теста", self.win.output.toPlainText())
+            ok = self._wait(lambda: "тесты-готово" in self.win.flash.text())
+        self.assertTrue(ok, self.win.flash.text())
+        self.assertIn("строка-теста", self.win.output.toPlainText())   # живой вывод
+        self.assertTrue(self.win._out_visible)                         # панель показана сама
         self.assertFalse(self.win._tests_running)
 
     def test_on_line_signal_levels(self):
@@ -420,33 +485,235 @@ class TestPySideActions(unittest.TestCase):
         self.win._tests_done({"ok": False, "service": "тесты упали",
                               "stdout": ["ошибка-теста"]})
         self.assertFalse(self.win._tests_running)
-        txt = self.win.output.toPlainText()
-        self.assertIn("ошибка-теста", txt)
-        self.assertIn("[X] тесты упали", txt)
+        self.assertIn("ошибка-теста", self.win.output.toPlainText())   # живой вывод
+        self.assertIn("тесты упали", self.win.flash.text())            # итог — флеш
         self.win._tests_done("не-словарь")   # не должен падать
 
-    # ---------- Диагностика ----------
-    def test_run_diagnostics_and_done(self):
+    # ---------- Диагностика (диалог вместо лога) ----------
+    def test_run_diagnostics_opens_dialog(self):
         import unittest.mock as mock
+        opened = []
+
+        class _Fake:
+            def __init__(self, parent=None):
+                opened.append(self)
+
+            def exec(self):
+                return 0
+
+        with mock.patch.object(self.z, "DiagnosticsDialog", _Fake):
+            self.win.run_diagnostics()
+        self.assertTrue(opened, "Диагностика не открыла диалог")
+
+    def test_diagnostics_dialog_fills_checks(self):
         checks = [{"name": "c1", "level": "ok", "msg": "норм"},
                   {"name": "c2", "level": "bad", "msg": "плохо",
                    "url": "http://example.com"},
                   {"name": "c3", "level": "warn", "msg": "внимание"}]
-        self.win.output.clear()
+        import unittest.mock as mock
         with mock.patch("service_manager.run_diagnostics",
                         return_value={"ok": False, "checks": checks, "service": "итог"}):
-            self.win.run_diagnostics()
-        self.assertTrue(self._wait(lambda: "итог" in self.win.output.toPlainText()))
-        txt = self.win.output.toPlainText()
-        self.assertIn("[+] c1: норм", txt)
-        self.assertIn("[X] c2: плохо", txt)
-        self.assertIn("http://example.com", txt)
-        self.assertIn("[?] c3: внимание", txt)
+            dlg = self.z.DiagnosticsDialog(self.win)
+            dlg._fill({"ok": False, "checks": checks, "service": "итог"})
+        texts = [lb.text() for lb in dlg.findChildren(self.z.QLabel)]
+        self.assertIn("[+] c1: норм", texts)
+        self.assertIn("[X] c2: плохо", texts)
+        self.assertTrue(any("http://example.com" in x for x in texts), texts)  # URL с отступом
+        self.assertIn("[?] c3: внимание", texts)
+        self.assertIn(self.i18n.t("ui.diag_counts", ok=1, warn=1, bad=1),
+                      dlg._counts.text())
+        dlg.deleteLater()
 
-    def test_diag_done_non_dict(self):
-        self.win.output.clear()
-        self.win._diag_done("не-словарь")
-        self.assertIn("[X] не-словарь", self.win.output.toPlainText())
+    def test_diagnostics_dialog_no_checks(self):
+        import unittest.mock as mock
+        with mock.patch("service_manager.run_diagnostics",
+                        return_value={"ok": True, "checks": []}):
+            dlg = self.z.DiagnosticsDialog(self.win)
+        dlg._fill("не-словарь")   # не-dict -> пустой чек-лист, без падения
+        texts = [lb.text() for lb in dlg.findChildren(self.z.QLabel)]
+        self.assertIn(self.i18n.t("ui.diag_no_checks"), texts)
+        dlg.deleteLater()
+
+    # ---------- Диалог статуса службы ----------
+    def test_status_dialog_fills_fields(self):
+        import unittest.mock as mock
+        with mock.patch("service_manager.query_status", return_value="Running"), \
+             mock.patch("service_manager.is_running", return_value=True), \
+             mock.patch("service_manager.run_service_action",
+                        return_value={"version": "1.2.3", "strategy": "general"}):
+            dlg = self.z.StatusDialog(self.win)
+            dlg._fill(dlg._load())
+        self.assertEqual(dlg._vals["service"].text(), "Running")
+        self.assertEqual(dlg._vals["winws"].text(), self.i18n.t("ui.status_running"))
+        self.assertEqual(dlg._vals["version"].text(), "1.2.3")
+        self.assertEqual(dlg._vals["strategy"].text(), "general")
+        dlg.deleteLater()
+
+    def test_status_dialog_load_error_branch(self):
+        import unittest.mock as mock
+        with mock.patch("service_manager.query_status", side_effect=RuntimeError("err")), \
+             mock.patch("service_manager.is_running", side_effect=RuntimeError("err2")), \
+             mock.patch("service_manager.run_service_action", side_effect=RuntimeError("err3")):
+            dlg = self.z.StatusDialog(self.win)
+            dlg._fill(dlg._load())
+        self.assertIn("ERR", dlg._vals["service"].text())
+        self.assertEqual(dlg._vals["winws"].text(), self.i18n.t("ui.status_stopped"))
+        dlg._fill("мусор")   # не-dict — без падения
+        dlg.deleteLater()
+
+    def test_open_status_opens_dialog(self):
+        import unittest.mock as mock
+        opened = []
+
+        class _Fake:
+            def __init__(self, parent=None):
+                opened.append(self)
+
+            def exec(self):
+                return 0
+
+        with mock.patch.object(self.z, "StatusDialog", _Fake):
+            self.win._open_status()
+        self.assertTrue(opened, "Статус не открыл диалог")
+
+    # ---------- Диалог обновлений ----------
+    def _make_updates_dialog(self, zapret=None, app=None):
+        import unittest.mock as mock
+        zapret = zapret or {"ok": True, "stdout": "нет данных", "enabled": True}
+        app = app or {"ok": True, "configured": False,
+                      "stdout": self.i18n.t("sm.app_upd_unconfigured")}
+        with mock.patch("service_manager.check_updates", return_value=zapret), \
+             mock.patch("service_manager.check_app_update", return_value=app):
+            dlg = self.z.UpdatesDialog(self.win)
+            # Обе секции проверяются разными воркерами — ждём обе подстановки
+            working = self.i18n.t("ui.working")
+            self._wait(lambda: dlg.zapret_lbl.text() != working
+                       and dlg.app_lbl.text() != working)
+        return dlg
+
+    def test_updates_dialog_shows_new_zapret_version(self):
+        dlg = self._make_updates_dialog(
+            zapret={"ok": True, "enabled": True, "local": "1.10.0",
+                    "remote": "1.10.4", "update_available": True})
+        self.assertIn("1.10.4", dlg.zapret_lbl.text())
+        self.assertTrue(dlg.zapret_btn.isEnabled())
+        self.assertFalse(dlg.app_btn.isEnabled())   # репозиторий не настроен
+        dlg.deleteLater()
+
+    def test_updates_dialog_latest_and_disabled(self):
+        dlg = self._make_updates_dialog(
+            zapret={"ok": True, "enabled": True, "local": "1.10.4",
+                    "remote": "1.10.4", "update_available": False,
+                    "stdout": self.i18n.t("sm.ver_latest", l="1.10.4")})
+        self.assertIn("1.10.4", dlg.zapret_lbl.text())
+        self.assertFalse(dlg.zapret_btn.isEnabled())
+        dlg.deleteLater()
+        dlg2 = self._make_updates_dialog(zapret={"ok": True, "enabled": False})
+        self.assertEqual(dlg2.zapret_lbl.text(), self.i18n.t("ui.upd_disabled"))
+        dlg2.deleteLater()
+
+    def test_updates_dialog_app_update_available(self):
+        dlg = self._make_updates_dialog(
+            app={"ok": True, "configured": True, "local": "0.4.0",
+                 "remote": "0.5.0", "update_available": True})
+        self.assertIn("0.5.0", dlg.app_lbl.text())
+        self.assertTrue(dlg.app_btn.isEnabled())
+        dlg.deleteLater()
+
+    def test_update_zapret_confirmed_dispatches_action(self):
+        import unittest.mock as mock
+        dlg = self._make_updates_dialog(
+            zapret={"ok": True, "enabled": True, "local": "1.10.0",
+                    "remote": "1.10.4", "update_available": True})
+        with mock.patch.object(self.z.QMessageBox, "question",
+                               return_value=self.z.QMessageBox.StandardButton.Yes), \
+             mock.patch("service_manager.run_service_action") as m:
+            dlg._update_zapret()
+            self.assertTrue(self._wait(lambda: m.called))
+        call = m.call_args
+        self.assertEqual(call.args[0], "update_zapret")
+        self.assertIn("on_line", call.kwargs)
+        self.assertTrue(self.win._out_visible)   # панель показана для хода обновления
+        dlg.deleteLater()
+
+    def test_update_zapret_cancel_noop(self):
+        import unittest.mock as mock
+        dlg = self._make_updates_dialog(
+            zapret={"ok": True, "enabled": True, "local": "1.10.0",
+                    "remote": "1.10.4", "update_available": True})
+        with mock.patch.object(self.z.QMessageBox, "question",
+                               return_value=self.z.QMessageBox.StandardButton.No), \
+             mock.patch("service_manager.run_service_action") as m:
+            dlg._update_zapret()
+        m.assert_not_called()
+        dlg.deleteLater()
+
+    def test_update_app_result_branches(self):
+        import unittest.mock as mock
+        dlg = self._make_updates_dialog()
+        # Успех: приложение выходит (вспомогательный скрипт перезапустит)
+        with mock.patch.object(self.win, "close") as close_m:
+            dlg._app_updated({"ok": True, "restart": True})
+        self.assertTrue(self.win._exiting)
+        close_m.assert_called_once()
+        self.win._exiting = False
+        # Ошибка: предупреждение + перепроверка обеих секций
+        warned = []
+        with mock.patch.object(self.z.QMessageBox, "warning",
+                               side_effect=lambda *a: warned.append(a)), \
+             mock.patch("service_manager.check_updates",
+                        return_value={"ok": True, "stdout": "x", "enabled": True}), \
+             mock.patch("service_manager.check_app_update",
+                        return_value={"ok": True, "configured": False}):
+            dlg._app_updated({"ok": False, "stderr": "нет ассета"})
+        self.assertTrue(warned)
+        self.assertIn("нет ассета", warned[0][2])
+        dlg.deleteLater()
+
+    def test_update_zapret_result_error_warns(self):
+        import unittest.mock as mock
+        dlg = self._make_updates_dialog()
+        warned = []
+        with mock.patch.object(self.z.QMessageBox, "warning",
+                               side_effect=lambda *a: warned.append(a)), \
+             mock.patch("service_manager.check_updates",
+                        return_value={"ok": True, "stdout": "x", "enabled": True}), \
+             mock.patch("service_manager.check_app_update",
+                        return_value={"ok": True, "configured": False}):
+            dlg._updated({"ok": False, "stderr": "сеть недоступна"})
+        self.assertTrue(warned)
+        self.assertIn("сеть недоступна", warned[0][2])
+        dlg.deleteLater()
+
+    def test_update_garbage_result_no_modal(self):
+        # Не-dict результат воркера (гонка доставки после deleteLater, мок) —
+        # без модального окна: вложенный цикл QMessageBox мог бы уничтожить
+        # диалог с уже запланированным удалением посреди показа (порча кучи)
+        import unittest.mock as mock
+        dlg = self._make_updates_dialog()
+        with mock.patch.object(self.z.QMessageBox, "warning") as warn_m, \
+             mock.patch.object(self.z.QMessageBox, "question") as quest_m:
+            dlg._updated(object())          # мусор вместо dict
+            dlg._app_updated("не-словарь")
+            dlg._updated("строка")
+        warn_m.assert_not_called()
+        quest_m.assert_not_called()
+        dlg.deleteLater()
+
+    def test_open_updates_opens_dialog(self):
+        import unittest.mock as mock
+        opened = []
+
+        class _Fake:
+            def __init__(self, parent=None):
+                opened.append(self)
+
+            def exec(self):
+                return 0
+
+        with mock.patch.object(self.z, "UpdatesDialog", _Fake):
+            self.win._open_updates()
+        self.assertTrue(opened, "Обновления не открыли диалог")
 
     # ---------- Статусы ----------
     def test_read_status_error_branch(self):
@@ -537,12 +804,10 @@ class TestPySideActions(unittest.TestCase):
             self.win.show_fakes()
         self.assertTrue(self._wait(
             lambda: self.i18n.t("ui.no_bins") in self.win.output.toPlainText()))
-        self.win.output.clear()
         self.win._fakes_replaced({"ok": False, "stderr": "нет такого fake"})
+        self.assertIn("нет такого fake", self.win.flash.text())
         self.win._fakes_replaced({"ok": True, "stdout": "заменено"})
-        txt = self.win.output.toPlainText()
-        self.assertIn("[X] нет такого fake", txt)
-        self.assertIn("[OK] заменено", txt)
+        self.assertIn("заменено", self.win.flash.text())
 
     # ---------- Фоновые операции ----------
     def test_worker_exception_becomes_error_result(self):
@@ -609,7 +874,11 @@ class TestPySideActions(unittest.TestCase):
             texts = [b.text() for b in self.win.findChildren(self.z.QPushButton)]
             self.assertTrue(any(x in ("RU", "EN") for x in texts))
         finally:
-            self.i18n.save(old)   # вернуть язык пользователя (реальный ui_settings.json)
+            # Язык возвращаем ТОЛЬКО пересборкой (тоггл _switch_lang),
+            # иначе окно и i18n.t разойдутся у следующих тестов
+            if self.i18n.LANG != old:
+                self.win._switch_lang()
+            self.i18n.save(old)   # и файл ui_settings.json к исходному языку
 
     def test_single_instance_mutex_roundtrip(self):
         # Именованный мьютекс ядра: берём и отпускаем (безопасно для реального приложения)
@@ -629,12 +898,17 @@ class TestPySideSource(unittest.TestCase):
 
     def test_all_action_strings_present(self):
         src = _read_src()
-        for a in ["service_status", "service_install", "service_remove", "start",
-                  "stop", "toggle_ipset", "toggle_check_updates", "check_updates",
+        for a in ["service_install", "service_remove", "start",
+                  "stop", "toggle_ipset", "toggle_check_updates",
                   "set_game_filter", "menu_status", "clear_discord",
                   "restore_payloads", "ipset_update", "update_hosts",
-                  "remove_conflicts", "relaunch_admin"]:
+                  "remove_conflicts", "relaunch_admin",
+                  "update_zapret", "update_app"]:   # действия обновлений (диалог)
             self.assertIn(f'"{a}"', src, f"Действие {a} не вызывается")
+        # Диалоги зовут ядро напрямую — сервисные действия в лог не попадают
+        for fn in ("check_updates", "check_app_update", "run_diagnostics",
+                   "query_status"):
+            self.assertIn(fn, src, f"Вызов {fn} отсутствует")
 
     def test_admin_gate_on_strategy(self):
         # Применение стратегии без прав должно честно отказываться

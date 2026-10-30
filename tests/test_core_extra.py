@@ -90,6 +90,8 @@ class TestUpdates(unittest.TestCase):
         from zapret_core import updates
 
         class _Resp:
+            """Ответ GitHub API latest release (новая модель: JSON, а не raw version.txt)."""
+
             def __enter__(self):
                 return self
 
@@ -97,7 +99,7 @@ class TestUpdates(unittest.TestCase):
                 return False
 
             def read(self):
-                return b"9.9.9"
+                return b'{"tag_name": "9.9.9", "assets": []}'
 
         d = self._dir()
         try:

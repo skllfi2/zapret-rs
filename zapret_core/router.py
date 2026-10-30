@@ -6,10 +6,11 @@ from .lists import ipset_update, load_user_lists, toggle_ipset, update_hosts
 from .menu import menu_status
 from .misc import admin_use, clear_discord, relaunch_as_admin
 from .scm import install_service, query_status, start_service, stop_service, uninstall_service  # noqa: F401 (точка патчинга тестов)
+from .selfupdate import check_app_update, update_app
 from .settings import game_filter_status, set_game_filter, toggle_check_updates
 from .strategies import apply_strategy, current_strategy, default_strategy
 from .tests_runner import best_strategy, run_tests, tests_prerequisites
-from .updates import check_updates
+from .updates import apply_zapret_update, check_updates
 from .winws import list_fakes, payloads_status, replace_fakes, restore_payloads, winws_is_running
 
 
@@ -64,6 +65,12 @@ def run_service_action(action: str = "status_zapret", arg: str = "", **kwargs) -
         return list_fakes()
     if action == "check_updates":
         return check_updates()
+    if action == "update_zapret":
+        return apply_zapret_update(on_line=kwargs.get("on_line"))
+    if action == "check_app_update":
+        return check_app_update()
+    if action == "update_app":
+        return update_app(on_line=kwargs.get("on_line"))
     if action in ("ipset_update", "update_ipset", "8"):
         return ipset_update()
     if action in ("update_hosts", "hosts_update", "9"):

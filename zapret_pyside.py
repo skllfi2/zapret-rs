@@ -17,6 +17,7 @@ import zapret_core.applog as applog
 from i18n import t
 
 try:
+    import shiboken6
     from PySide6.QtCore import QObject, QRunnable, Qt, QThreadPool, QTimer, Signal, Slot
     from PySide6.QtGui import QAction, QCloseEvent, QColor, QIcon, QMouseEvent, QPainter, QPixmap
     from PySide6.QtWidgets import (
@@ -34,6 +35,7 @@ try:
         QMenu,
         QMessageBox,
         QPushButton,
+        QScrollArea,
         QSpinBox,
         QSystemTrayIcon,
         QTextEdit,
@@ -44,21 +46,28 @@ except ImportError:
     print("ERROR: PySide6 не установлен. Выполни: pip install PySide6-Essentials")
     sys.exit(1)
 
+
+def _q_alive(obj: QObject) -> bool:
+    """C++-объект Qt ещё не удалён. Диалог мог закрыться, пока шёл фоновый воркер:
+    без этой проверки колбэк стучится в удалённые виджеты (краш/порча кучи)."""
+    return shiboken6.isValid(obj)
+
 COLORS = {
-    "bg_main": "#181825",
-    "bg_card": "#202030",
-    "bg_header": "#141420",
-    "text_primary": "#f0f0f5",
-    "text_secondary": "#a0a0b0",
-    "text_muted": "#707078",
-    "accent": "#d4afff",
+    "bg_main": "#101218",
+    "bg_card": "#171a22",
+    "bg_header": "#14171f",
+    "text_primary": "#e8eaf0",
+    "text_secondary": "#9aa1b2",
+    "text_muted": "#6a7080",
+    "accent": "#8aa4ff",
     "danger": "#e86060",
     "warn": "#e8c860",
     "success": "#5ee87f",
-    "border": "#2a2a3a",
-    "border_hover": "#3a3a4a",
-    "button_bg": "#23233a",
-    "button_bg_hover": "#2e2e45",
+    "border": "#242936",
+    "border_hover": "#333a4d",
+    "button_bg": "#1b202a",
+    "button_bg_hover": "#232a37",
+    "log_bg": "#0b0d12",
 }
 
 # Цвета как PrintGreen/PrintYellow/PrintRed в оригинале
@@ -66,32 +75,71 @@ LEVEL_COLORS = {"ok": COLORS["success"], "warn": COLORS["warn"], "bad": COLORS["
                 "info": "#c8c8d8"}
 
 STYLESHEET = f"""
-QWidget {{ background-color: {COLORS['bg_main']}; color: {COLORS['text_primary']}; font-family: 'Segoe UI'; }}
-QFrame#header {{ background-color: {COLORS['bg_header']}; }}
-QLabel#appTitle {{ font-size: 20px; font-weight: bold; }}
-QLabel#version {{ color: {COLORS['text_secondary']}; font-size: 13px; }}
-QLabel#section {{ color: {COLORS['accent']}; font-size: 10pt; font-weight: bold;
-    padding-top: 6px; }}
+QWidget {{ background-color: {COLORS['bg_main']}; color: {COLORS['text_primary']};
+    font-family: 'Segoe UI Variable', 'Segoe UI'; font-size: 9pt; }}
+
+QFrame#header {{ background-color: {COLORS['bg_header']};
+    border-bottom: 1px solid {COLORS['border']}; }}
+QFrame#card {{ background-color: {COLORS['bg_card']}; border: 1px solid {COLORS['border']};
+    border-radius: 12px; }}
+
+QLabel#appTitle {{ font-size: 17px; font-weight: bold; }}
+QLabel#version {{ color: {COLORS['text_secondary']}; font-size: 8pt; }}
+QLabel#section {{ color: {COLORS['text_secondary']}; font-size: 8pt; font-weight: bold;
+    padding: 8px 0 4px 0; border-bottom: 1px solid {COLORS['border']}; }}
 QLabel#footer {{ color: {COLORS['text_muted']}; font-size: 7pt; }}
 QLabel#warn {{ color: {COLORS['danger']}; font-weight: bold; }}
 QLabel#status {{ color: {COLORS['text_secondary']}; font-size: 9pt; font-weight: bold; }}
+QLabel#flash {{ color: {COLORS['text_secondary']}; font-size: 8pt; }}
+
 QPushButton {{ background-color: {COLORS['button_bg']}; color: {COLORS['text_primary']};
-    border: 1px solid {COLORS['border']}; border-radius: 6px; padding: 8px 12px;
-    font-family: 'Segoe UI'; font-weight: bold; font-size: 9pt; text-align: left; }}
-QPushButton:hover {{ background-color: {COLORS['button_bg_hover']}; border-color: {COLORS['border_hover']}; }}
-QPushButton:pressed {{ background-color: #1c1c30; }}
-QPushButton#small {{ padding: 6px 10px; font-size: 8pt; text-align: center; }}
+    border: 1px solid {COLORS['border']}; border-radius: 8px; padding: 8px 12px;
+    font-weight: bold; font-size: 9pt; text-align: left; }}
+QPushButton:hover {{ background-color: {COLORS['button_bg_hover']};
+    border-color: {COLORS['accent']}; }}
+QPushButton:pressed {{ background-color: #14171f; }}
+QPushButton:focus {{ border-color: {COLORS['accent']}; }}
+QPushButton:disabled {{ color: {COLORS['text_muted']}; background-color: {COLORS['bg_main']};
+    border-color: {COLORS['border']}; }}
+QPushButton#small {{ padding: 4px 12px; font-size: 8pt; text-align: center; }}
+
 QComboBox, QSpinBox {{ background-color: {COLORS['button_bg']}; color: {COLORS['text_primary']};
-    border: 1px solid {COLORS['border']}; border-radius: 6px; padding: 6px 10px; font-size: 9pt; }}
+    border: 1px solid {COLORS['border']}; border-radius: 8px; padding: 6px 10px; font-size: 9pt; }}
 QComboBox:hover, QSpinBox:hover {{ border-color: {COLORS['border_hover']}; }}
+QComboBox:focus, QSpinBox:focus {{ border-color: {COLORS['accent']}; }}
+QComboBox::drop-down {{ subcontrol-origin: padding; width: 24px; border: none; }}
+QComboBox::down-arrow {{ image: none; width: 8px; height: 8px; }}
 QComboBox QAbstractItemView {{ background-color: {COLORS['bg_card']}; color: {COLORS['text_primary']};
-    selection-background-color: {COLORS['button_bg_hover']}; border: 1px solid {COLORS['border']}; }}
-QTextEdit {{ background-color: #12121a; color: #e8e8e8; border: 1px solid {COLORS['border']};
-    border-radius: 6px; font-family: Consolas; font-size: 9pt; selection-background-color: #3a3a5a; }}
-QDialog {{ background-color: {COLORS['bg_card']}; }}
+    selection-background-color: {COLORS['button_bg_hover']}; selection-color: {COLORS['text_primary']};
+    border: 1px solid {COLORS['border']}; border-radius: 8px; padding: 4px; }}
+
+QTextEdit {{ background-color: {COLORS['log_bg']}; color: #dfe3ec;
+    border: 1px solid {COLORS['border']}; border-radius: 10px; padding: 8px;
+    font-family: 'Cascadia Mono', 'Consolas'; font-size: 9pt;
+    selection-background-color: #31405e; selection-color: {COLORS['text_primary']}; }}
+
+QDialog {{ background-color: {COLORS['bg_card']}; border: 1px solid {COLORS['border']}; }}
+
 QMenu {{ background-color: {COLORS['bg_card']}; color: {COLORS['text_primary']};
-    border: 1px solid {COLORS['border']}; }}
+    border: 1px solid {COLORS['border']}; border-radius: 8px; padding: 4px; }}
+QMenu::item {{ border-radius: 6px; padding: 6px 20px 6px 12px; margin: 1px 2px; }}
 QMenu::item:selected {{ background-color: {COLORS['button_bg_hover']}; }}
+QMenu::separator {{ height: 1px; background-color: {COLORS['border']};
+    margin: 4px 8px; }}
+
+QScrollBar:vertical {{ background: transparent; width: 10px; margin: 2px; }}
+QScrollBar::handle:vertical {{ background-color: #2c3342; border-radius: 4px;
+    min-height: 30px; }}
+QScrollBar::handle:vertical:hover {{ background-color: #3a4356; }}
+QScrollBar:horizontal {{ background: transparent; height: 10px; margin: 2px; }}
+QScrollBar::handle:horizontal {{ background-color: #2c3342; border-radius: 4px;
+    min-width: 30px; }}
+QScrollBar::handle:horizontal:hover {{ background-color: #3a4356; }}
+QScrollBar::add-line, QScrollBar::sub-line {{ height: 0; width: 0; }}
+QScrollBar::add-page, QScrollBar::sub-page {{ background: transparent; }}
+
+QToolTip {{ background-color: {COLORS['bg_card']}; color: {COLORS['text_primary']};
+    border: 1px solid {COLORS['border']}; padding: 4px 8px; }}
 """
 
 
@@ -189,6 +237,271 @@ class TestDialog(QDialog):
         return self.kind.currentData(), self.mode.currentData(), sel
 
 
+class UpdatesDialog(QDialog):
+    """Диалог обновлений: две независимые секции — zapret и само приложение.
+
+    Проверка обеих идёт в фоне (win.submit); обновление одного компонента
+    не затрагивает другой. Панель вывода показывается для живого хода обновления.
+    """
+
+    def __init__(self, win: "MainWindow") -> None:
+        super().__init__(win)
+        self._win = win
+        self._zapret_new: str | None = None
+        self._app_new: str | None = None
+        self.setWindowTitle(t("ui.upd_title"))
+        self.setMinimumWidth(480)
+        lay = QVBoxLayout(self)
+        lay.setSpacing(10)
+
+        # --- zapret (файлы обхода DPI) ---
+        zcard = QFrame()
+        zcard.setObjectName("card")
+        zl = QVBoxLayout(zcard)
+        ztitle = QLabel(t("ui.upd_zapret_sec"))
+        ztitle.setObjectName("section")
+        zl.addWidget(ztitle)
+        self.zapret_lbl = QLabel(t("ui.working"))
+        self.zapret_lbl.setWordWrap(True)
+        zl.addWidget(self.zapret_lbl)
+        self.zapret_btn = QPushButton(t("ui.upd_btn_zapret"))
+        self.zapret_btn.setEnabled(False)
+        self.zapret_btn.clicked.connect(self._update_zapret)
+        zl.addWidget(self.zapret_btn)
+        lay.addWidget(zcard)
+
+        # --- zapret-simple (приложение) ---
+        acard = QFrame()
+        acard.setObjectName("card")
+        al = QVBoxLayout(acard)
+        atitle = QLabel(t("ui.upd_app_sec"))
+        atitle.setObjectName("section")
+        al.addWidget(atitle)
+        self.app_lbl = QLabel(t("ui.working"))
+        self.app_lbl.setWordWrap(True)
+        al.addWidget(self.app_lbl)
+        self.app_btn = QPushButton(t("ui.upd_btn_app"))
+        self.app_btn.setEnabled(False)
+        self.app_btn.clicked.connect(self._update_app)
+        al.addWidget(self.app_btn)
+        lay.addWidget(acard)
+
+        # --- кнопки диалога ---
+        row = QHBoxLayout()
+        again = QPushButton(t("ui.upd_btn_check"))
+        again.clicked.connect(self._check)
+        row.addWidget(again)
+        row.addStretch()
+        close = QPushButton(t("ui.dlg_close"))
+        close.clicked.connect(self.accept)
+        row.addWidget(close)
+        lay.addLayout(row)
+
+        self._check()
+
+    def _check(self) -> None:
+        """Фоновая проверка обеих секций; кнопки обновления — только при доступности."""
+        self.zapret_btn.setEnabled(False)
+        self.app_btn.setEnabled(False)
+        self.zapret_lbl.setText(t("ui.working"))
+        self.app_lbl.setText(t("ui.working"))
+        self._win.submit(service_manager.check_updates, self._zapret_checked)
+        self._win.submit(service_manager.check_app_update, self._app_checked)
+
+    def _zapret_checked(self, r: Any) -> None:
+        if not _q_alive(self):   # диалог закрыт, пока проверялись обновления
+            return
+        r = r if isinstance(r, dict) else {}
+        if r.get("enabled") is False:
+            self.zapret_lbl.setText(t("ui.upd_disabled"))
+        elif r.get("update_available") and r.get("remote"):
+            self._zapret_new = str(r["remote"])
+            self.zapret_lbl.setText(t("sm.ver_new", r=r["remote"], l=r.get("local", "?")))
+            self.zapret_btn.setEnabled(True)
+        else:
+            self.zapret_lbl.setText(str(r.get("stderr") or r.get("stdout") or t("ui.upd_none")))
+
+    def _app_checked(self, r: Any) -> None:
+        if not _q_alive(self):
+            return
+        r = r if isinstance(r, dict) else {}
+        if not r.get("configured", True):
+            self.app_lbl.setText(t("sm.app_upd_unconfigured"))
+        elif r.get("update_available") and r.get("remote"):
+            self._app_new = str(r["remote"])
+            self.app_lbl.setText(t("sm.app_upd_new", r=r["remote"], l=r.get("local", "?")))
+            self.app_btn.setEnabled(True)
+        else:
+            self.app_lbl.setText(str(r.get("stdout") or r.get("stderr") or t("ui.upd_none")))
+
+    def _update_zapret(self) -> None:
+        if not self._zapret_new:
+            return
+        ans = QMessageBox.question(self, t("ui.upd_title"),
+                                   t("ui.upd_confirm_zapret", v=self._zapret_new))
+        if ans != QMessageBox.StandardButton.Yes:
+            return
+        self.zapret_btn.setEnabled(False)
+        self._win._show_output()  # ход обновления — живой вывод в панель
+        self._win.submit_action(service_manager.run_service_action, self._updated,
+                                "update_zapret", on_line=self._win._emit_line)
+
+    def _updated(self, r: Any) -> None:
+        if not _q_alive(self):
+            return
+        if not isinstance(r, dict):
+            # Воркер отдаёт всегда dict; не-dict — мусор от чужого кода (мок,
+            # гонка). Модальное окно на такой «ошибке» опасно: диалог к этому
+            # моменту мог уже получить deleteLater, и вложенный цикл QMessageBox
+            # уничтожит его посреди показа (порча кучи).
+            return
+        if r.get("ok"):
+            self._win.flash_msg(str(r.get("stdout") or ""), "ok")
+        else:
+            QMessageBox.warning(self, t("ui.upd_title"),
+                                str(r.get("stderr") or r.get("error") or "?"))
+        self._check()  # перепроверить обе секции
+
+    def _update_app(self) -> None:
+        if not self._app_new:
+            return
+        ans = QMessageBox.question(self, t("ui.upd_title"),
+                                   t("ui.upd_confirm_app", v=self._app_new))
+        if ans != QMessageBox.StandardButton.Yes:
+            return
+        self.app_btn.setEnabled(False)
+        self._win._show_output()  # ход обновления — живой вывод в панель
+        self._win.submit_action(service_manager.run_service_action, self._app_updated,
+                                "update_app", on_line=self._win._emit_line)
+
+    def _app_updated(self, r: Any) -> None:
+        if not _q_alive(self):
+            return
+        if not isinstance(r, dict):
+            return   # см. комментарий в _updated: мусор не открывает модалку
+        if r.get("ok"):
+            # Вспомогательный скрипт заменит файлы после нашего завершения — выходим
+            self._win._exiting = True
+            self._win.close()
+        else:
+            QMessageBox.warning(self, t("ui.upd_title"),
+                                str(r.get("stderr") or r.get("error") or "?"))
+            self._check()
+
+
+class StatusDialog(QDialog):
+    """Диалог статуса службы: служба, winws.exe, версия zapret, стратегия."""
+
+    def __init__(self, win: "MainWindow") -> None:
+        super().__init__(win)
+        self.setWindowTitle(t("ui.status_title"))
+        self.setMinimumWidth(440)
+        lay = QVBoxLayout(self)
+        grid = QGridLayout()
+        grid.setHorizontalSpacing(16)
+        self._vals: dict[str, QLabel] = {}
+        for i, key in enumerate(("service", "winws", "version", "strategy")):
+            name = QLabel(t(f"ui.status_{key}"))
+            name.setObjectName("version")
+            val = QLabel("…")
+            val.setWordWrap(True)
+            self._vals[key] = val
+            grid.addWidget(name, i, 0)
+            grid.addWidget(val, i, 1)
+        lay.addLayout(grid)
+        row = QHBoxLayout()
+        row.addStretch()
+        close = QPushButton(t("ui.dlg_close"))
+        close.clicked.connect(self.accept)
+        row.addWidget(close)
+        lay.addLayout(row)
+        win.submit(self._load, self._fill)
+
+    @staticmethod
+    def _load() -> dict:
+        """Служба + winws + версия/стратегия — одним фоновым запросом."""
+        try:
+            svc = str(service_manager.query_status())
+        except Exception as e:  # noqa: BLE001
+            svc = f"ERR: {str(e)[:60]}"
+        try:
+            running = bool(service_manager.is_running())
+        except Exception:  # noqa: BLE001
+            running = False
+        try:
+            menu = service_manager.run_service_action("menu_status") or {}
+        except Exception:  # noqa: BLE001
+            menu = {}
+        return {"service": svc, "running": running,
+                "version": menu.get("version", "?"), "strategy": menu.get("strategy", "?")}
+
+    def _fill(self, d: Any) -> None:
+        if not _q_alive(self):   # диалог закрыт, пока собирался статус
+            return
+        d = d if isinstance(d, dict) else {}
+        self._vals["service"].setText(str(d.get("service", "?")))
+        self._vals["winws"].setText(
+            t("ui.status_running") if d.get("running") else t("ui.status_stopped"))
+        self._vals["version"].setText(str(d.get("version", "?")))
+        self._vals["strategy"].setText(str(d.get("strategy", "?")))
+
+
+class DiagnosticsDialog(QDialog):
+    """Диагностика в диалоге: цветной чек-лист + итог (вместо вывода в лог)."""
+
+    def __init__(self, win: "MainWindow") -> None:
+        super().__init__(win)
+        self.setWindowTitle(t("ui.diag_title"))
+        self.setMinimumSize(560, 440)
+        lay = QVBoxLayout(self)
+        scroll = QScrollArea()
+        scroll.setWidgetResizable(True)
+        body = QWidget()
+        self._checks_lay = QVBoxLayout(body)
+        self._checks_lay.addWidget(QLabel(t("ui.working")))
+        scroll.setWidget(body)
+        lay.addWidget(scroll, 1)
+        self._counts = QLabel("")
+        self._counts.setObjectName("section")
+        lay.addWidget(self._counts)
+        row = QHBoxLayout()
+        row.addStretch()
+        close = QPushButton(t("ui.dlg_close"))
+        close.clicked.connect(self.accept)
+        row.addWidget(close)
+        lay.addLayout(row)
+        win.submit(service_manager.run_diagnostics, self._fill)
+
+    def _fill(self, r: Any) -> None:
+        if not _q_alive(self):   # диалог закрыт, пока шла диагностика
+            return
+        while self._checks_lay.count():  # убрать плейсхолдер «Проверяю...»
+            item = self._checks_lay.takeAt(0)
+            w = item.widget() if item is not None else None
+            if w is not None:
+                w.deleteLater()
+        r = r if isinstance(r, dict) else {}
+        checks = r.get("checks") or []
+        if not checks:
+            self._checks_lay.addWidget(QLabel(str(r.get("service") or t("ui.diag_no_checks"))))
+        ok = warn = bad = 0
+        for ch in checks:
+            level = str(ch.get("level", "info"))
+            ok += level == "ok"
+            warn += level == "warn"
+            bad += level == "bad"
+            mark = {"ok": "[+]", "warn": "[?]", "bad": "[X]"}.get(level, "   ")
+            line = QLabel(f"{mark} {ch.get('name')}: {ch.get('msg')}")
+            line.setWordWrap(True)
+            line.setStyleSheet(f"color: {LEVEL_COLORS.get(level, LEVEL_COLORS['info'])};")
+            self._checks_lay.addWidget(line)
+            if ch.get("url"):
+                url = QLabel(f"      {ch['url']}")
+                url.setStyleSheet(f"color: {COLORS['text_muted']};")
+                self._checks_lay.addWidget(url)
+        self._counts.setText(t("ui.diag_counts", ok=ok, warn=warn, bad=bad))
+
+
 class MainWindow(QMainWindow):
     # Сигнал живого вывода тестов: рабочий поток -> главный поток Qt
     line_signal = Signal(str)
@@ -208,6 +521,15 @@ class MainWindow(QMainWindow):
         self._busy = False
         self._tests_running = False
         self._best_pending = False  # apply_best -> apply_strategy: флаг для ui.best_fail (D4)
+
+        # Панель вывода скрыта по умолчанию (показ по клику/при тестах); состояние
+        # переживает переключение языка (UI пересобирается в _build_ui)
+        self._out_visible = False
+        # Краткий флеш-статус в шапке — вместо служебных строк в логе вывода
+        self._flash_timer = QTimer(self)
+        self._flash_timer.setSingleShot(True)
+        self._flash_timer.setInterval(5000)
+        self._flash_timer.timeout.connect(lambda: self.flash.setText(""))
 
         self._build_ui()
         self._load_strategies()
@@ -263,6 +585,7 @@ class MainWindow(QMainWindow):
         self.apply_btn = QPushButton(t("ui.apply"))
         self.apply_btn.setObjectName("small")
         self.apply_btn.setFixedWidth(100)
+        self.apply_btn.setCursor(Qt.CursorShape.PointingHandCursor)
         self.apply_btn.clicked.connect(self.apply_strategy)
         srow.addWidget(self.apply_btn)
         srow.addStretch()
@@ -294,6 +617,18 @@ class MainWindow(QMainWindow):
         self.payload_warn.setAlignment(Qt.AlignmentFlag.AlignRight)
         self.payload_warn.set_on_click(lambda: self.run_action("restore_payloads"))
         right.addWidget(self.payload_warn)
+        # Флеш-статус действия + тумблер панели вывода (скрыта по умолчанию)
+        frow = QHBoxLayout()
+        self.flash = QLabel("")
+        self.flash.setObjectName("flash")
+        frow.addWidget(self.flash, 1)
+        self.out_toggle = QPushButton(t("ui.out_show"))
+        self.out_toggle.setObjectName("small")
+        self.out_toggle.setFixedHeight(26)
+        self.out_toggle.setCursor(Qt.CursorShape.PointingHandCursor)
+        self.out_toggle.clicked.connect(self._toggle_output)
+        frow.addWidget(self.out_toggle)
+        right.addLayout(frow)
         h.addLayout(right)
         lay.addWidget(header)
 
@@ -306,7 +641,6 @@ class MainWindow(QMainWindow):
         # ===== Меню-секции =====
         card = QFrame()
         card.setObjectName("card")
-        card.setStyleSheet(f"QFrame#card {{ background-color: {COLORS['bg_card']}; border-radius: 10px; }}")
         c = QVBoxLayout(card)
         c.setContentsMargins(16, 10, 16, 10)
         c.setSpacing(6)
@@ -320,7 +654,7 @@ class MainWindow(QMainWindow):
         g.setSpacing(6)
         self._menu_btn(g, 0, 0, t("ui.install_service"), lambda: self.run_action("service_install"))
         self._menu_btn(g, 0, 1, t("ui.remove_services"), lambda: self.run_action("service_remove"))
-        self._menu_btn(g, 1, 0, t("ui.check_status"), lambda: self.run_action("service_status"))
+        self._menu_btn(g, 1, 0, t("ui.check_status"), self._open_status)
         self._menu_btn(g, 1, 1, t("ui.start_service"), lambda: self.run_action("start"))
         self._menu_btn(g, 1, 2, t("ui.stop_service"), lambda: self.run_action("stop"))
         self._menu_btn(g, 0, 2, t("ui.admin_rights"), self._relaunch_admin)
@@ -354,7 +688,7 @@ class MainWindow(QMainWindow):
         g.setSpacing(6)
         self._menu_btn(g, 0, 0, t("ui.update_ipset"), lambda: self.run_action("ipset_update"))
         self._menu_btn(g, 0, 1, t("ui.update_hosts"), lambda: self.run_action("update_hosts"))
-        self._menu_btn(g, 1, 0, t("ui.check_updates"), lambda: self.run_action("check_updates"))
+        self._menu_btn(g, 1, 0, t("ui.check_updates"), self._open_updates)
         g.setColumnStretch(0, 1)
         g.setColumnStretch(1, 1)
         c.addLayout(g)
@@ -376,11 +710,10 @@ class MainWindow(QMainWindow):
         c.addLayout(g)
         c.addStretch(1)  # пункты меню прижаты вверх, не слипаются с выводом
 
-        # ===== Правая панель: ВЫВОД (цветной, как PrintGreen/Red/Yellow) =====
-        out_panel = QFrame()
-        out_panel.setObjectName("card")
-        out_panel.setStyleSheet(f"QFrame#card {{ background-color: {COLORS['bg_card']}; border-radius: 10px; }}")
-        o = QVBoxLayout(out_panel)
+        # ===== Правая панель: ВЫВОД (скрыта по умолчанию, показ по клику) =====
+        self.out_panel = QFrame()
+        self.out_panel.setObjectName("card")
+        o = QVBoxLayout(self.out_panel)
         o.setContentsMargins(14, 10, 14, 10)
         o.setSpacing(6)
         self.output = QTextEdit()
@@ -405,15 +738,45 @@ class MainWindow(QMainWindow):
         foot_lbl = QLabel(t("ui.footer"))
         foot_lbl.setObjectName("footer")
         o.addWidget(foot_lbl)
-        body.addWidget(out_panel, 2)
+        body.addWidget(self.out_panel, 2)
+        # По умолчанию вывод скрыт — показывается по кнопке в шапке или сам
+        # при старте живого вывода тестов/списочных результатов действий
+        self.out_panel.setVisible(self._out_visible)
+        self._sync_out_toggle()
 
         self.setCentralWidget(root)
         self.add_out(t("ui.ready_msg"), "info")
+
+    # ---------- Панель вывода: показ/скрытие ----------
+    def _toggle_output(self) -> None:
+        self._out_visible = not self._out_visible
+        self.out_panel.setVisible(self._out_visible)
+        self._sync_out_toggle()
+
+    def _show_output(self) -> None:
+        """Показать панель вывода (живой вывод тестов, списки результата)."""
+        if not self._out_visible:
+            self._out_visible = True
+            self.out_panel.setVisible(True)
+            self._sync_out_toggle()
+
+    def _sync_out_toggle(self) -> None:
+        self.out_toggle.setText(t("ui.out_hide") if self._out_visible else t("ui.out_show"))
+
+    def flash_msg(self, text: str, level: str = "info") -> None:
+        """Краткий статус действия в шапке — вместо служебных строк в логе."""
+        if not text:
+            return
+        color = LEVEL_COLORS.get(level, LEVEL_COLORS["info"])
+        self.flash.setStyleSheet(f"color: {color};")
+        self.flash.setText(str(text)[:200])
+        self._flash_timer.start()
 
     def _menu_btn(self, grid: QGridLayout, row: int, col: int, text: str,
                   cmd: Callable[..., None]) -> QPushButton:
         btn = QPushButton(text)
         btn.setMinimumHeight(34)
+        btn.setCursor(Qt.CursorShape.PointingHandCursor)
         btn.clicked.connect(cmd)
         grid.addWidget(btn, row, col)
         self._menu_buttons.append(btn)
@@ -501,7 +864,7 @@ class MainWindow(QMainWindow):
 
     def _copy_output(self) -> None:
         QApplication.clipboard().setText(self.output.toPlainText())
-        self.add_out(t("ui.out_copy_done"), "ok")
+        self.flash_msg(t("ui.out_copy_done"), "ok")
 
     def _clear_output(self) -> None:
         self.output.clear()
@@ -515,9 +878,9 @@ class MainWindow(QMainWindow):
         try:
             with open(path, "w", encoding="utf-8") as f:
                 f.write(self.output.toPlainText())
-            self.add_out(t("ui.out_saved", p=path), "ok")
+            self.flash_msg(t("ui.out_saved", p=path), "ok")
         except OSError as e:
-            self.add_out(t("ui.out_save_fail", e=e), "bad")
+            self.flash_msg(t("ui.out_save_fail", e=e), "bad")
 
     # ---------- Фоновые операции ----------
     def submit(self, fn: Callable[..., Any], on_done: Callable[[Any], None],
@@ -553,7 +916,6 @@ class MainWindow(QMainWindow):
         """Кнопка «Повысить права»: отпускаем мьютекс, зовём UAC-перезапуск.
         При успехе закрываем текущий экземпляр (иначе ребёнок упирается в
         ERROR_ALREADY_EXISTS); при отказе UAC — возвращаем мьютекс."""
-        self.add_out(f">>> {t('ui.admin_rights')}", "info")
         _release_mutex()
         self.submit_action(service_manager.run_service_action, self._relaunch_done, "relaunch_admin")
 
@@ -584,13 +946,13 @@ class MainWindow(QMainWindow):
         sid = self.strat_box.currentText()
         if not sid:
             self._best_pending = False  # ранний отказ — _apply_done не выстрелит
-            self.add_out(t("ui.err_no_strategy"), "bad")
+            self.flash_msg(t("ui.err_no_strategy"), "bad")
             return
         if not service_manager.is_admin():
             self._best_pending = False
-            self.add_out(t("ui.apply_need_admin"), "bad")
+            self.flash_msg(t("ui.apply_need_admin"), "bad")
             return
-        self.add_out(t("ui.applying_strategy", s=sid), "info")
+        self.flash_msg(t("ui.applying_strategy", s=sid), "info")
         # На время применения гасим комбобокс и кнопку (B1): две быстрые смены
         # не должны перетирать binPath друг другу
         self.strat_box.setEnabled(False)
@@ -606,22 +968,21 @@ class MainWindow(QMainWindow):
             self._best_pending = False
             if not r.get("ok"):
                 # apply_best_strategy -> apply_strategy не удалась: честный итог (D4)
-                self.add_out(t("ui.best_fail", e=msg), "bad")
+                self.flash_msg(t("ui.best_fail", e=msg), "bad")
                 self.update_status()
                 self.refresh_menu_status()
                 return
-        self.add_out(f"[{'OK' if r.get('ok') else 'X'}] {msg}",
-                     "ok" if r.get("ok") else "bad")
+        self.flash_msg(str(msg or ""), "ok" if r.get("ok") else "bad")
         self.update_status()
         self.refresh_menu_status()
 
     # ---------- Действия ----------
     def run_action(self, action: str) -> None:
-        self.add_out(f">>> {action}", "info")
         self.submit_action(service_manager.run_service_action, self._action_done, action)
 
     def _action_done(self, r: Any) -> None:
         level = "ok" if isinstance(r, dict) and r.get("ok") else "bad"
+        lines: list[str] = []
         if isinstance(r, tuple):
             ok, msg = r
             level = "ok" if ok else "bad"
@@ -630,13 +991,18 @@ class MainWindow(QMainWindow):
             msg = r.get("service", r.get("stdout", r.get("stderr", r.get("error", ""))))
             if isinstance(msg, bytes):
                 msg = msg.decode("utf-8", errors="replace")
-            # Частные случаи диагностики-действий с списками
-            for line in (r.get("actions") or []) + (r.get("stdout") or [])[:50] \
-                    if isinstance(r.get("stdout"), list) else (r.get("actions") or []):
-                self.add_out(str(line), "info")
+            # Списочные результаты (удалённые конфликты, обновлённые списки) —
+            # это живой вывод действия: печатаем в панель и показываем её
+            src = r.get("stdout")
+            src_lines = src if isinstance(src, list) else []
+            lines = [str(x) for x in list(r.get("actions") or []) + src_lines[:50]]
         else:
             msg = str(r)
-        self.add_out(f"[{'OK' if level == 'ok' else 'X'}] {str(msg)[:400]}", level)
+        if lines:
+            self._show_output()
+            for line in lines:
+                self.add_out(line, "info")
+        self.flash_msg(str(msg)[:200], level)
         self.update_status()
         self.refresh_menu_status()
 
@@ -651,33 +1017,25 @@ class MainWindow(QMainWindow):
         menu.exec(self.mapToGlobal(self.rect().topLeft()))
 
     def _set_game_filter(self, mode: str) -> None:
-        self.add_out(f">>> Game Filter -> {mode}", "info")
         self.submit_action(service_manager.run_service_action, self._action_done,
                            "set_game_filter", mode=mode)
 
-    # ---------- Диагностика (17 проверок оригинала) ----------
+    # ---------- Диагностика (17 проверок оригинала) — в диалоговом окне ----------
     def run_diagnostics(self) -> None:
-        self.add_out(f">>> {t('ui.run_diagnostics')}...", "info")
-        self.submit_action(service_manager.run_diagnostics, self._diag_done)
+        DiagnosticsDialog(self).exec()
 
-    def _diag_done(self, r: Any) -> None:
-        if not isinstance(r, dict):
-            self.add_out(f"[X] {r}", "bad")
-            return
-        # Цветная печать чек-листа — как PrintGreen/PrintYellow/PrintRed
-        for ch in r.get("checks", []):
-            level = ch.get("level", "info")
-            mark = {"ok": "[+]", "warn": "[?]", "bad": "[X]"}.get(level, "   ")
-            line = f"{mark} {ch.get('name')}: {ch.get('msg')}"
-            self.add_out(line, level)
-            if ch.get("url"):
-                self.add_out(f"      {ch['url']}", "info")
-        self.add_out(r.get("service", ""), "ok" if r.get("ok") else "warn")
+    def _open_updates(self) -> None:
+        """Диалог обновлений: проверка и применение — zapret и приложение."""
+        UpdatesDialog(self).exec()
+
+    def _open_status(self) -> None:
+        """Диалог статуса службы (вместо текста в логе вывода)."""
+        StatusDialog(self).exec()
 
     # ---------- Тесты (оригинальный test zapret.ps1) ----------
     def run_tests(self) -> None:
         if self._tests_running:
-            self.add_out(t("ui.games_running"), "warn")
+            self.flash_msg(t("ui.games_running"), "warn")
             return
         # Guard ставим ДО prereq-воркера (B1): второй клик не должен пройти,
         # даже пока первый prereq ещё в очереди; снимается при отказе prereq,
@@ -689,9 +1047,9 @@ class MainWindow(QMainWindow):
     def _tests_prereq_done(self, r: Any) -> None:
         if not r.get("ok"):
             self._tests_running = False
-            for p in r.get("problems", []):
-                self.add_out(f"[X] {p}", "bad")
-            self.add_out(t("ui.fix_errors"), "warn")
+            problems = "\n".join(str(p) for p in r.get("problems", []))
+            text = f"{problems}\n\n{t('ui.fix_errors')}" if problems else t("ui.fix_errors")
+            QMessageBox.warning(self, t("ui.run_tests"), text)
             return
         if not self._tests_running:
             return  # воркер уже завершился (закрытие окна) — не открываем диалог
@@ -700,6 +1058,7 @@ class MainWindow(QMainWindow):
             self._tests_running = False
             return
         kind, mode, sel = dlg.values()
+        self._show_output()  # живой вывод тестов — панель показывается сама
         self.add_out(t("ui.running_tests", t=kind, m=mode), "info")
         # Живой вывод: колбэк вызывается из рабочего потока, в UI — только через сигнал;
         # should_stop (B2): закрытие окна останавливает ps1, а не оставляет сироту
@@ -731,8 +1090,8 @@ class MainWindow(QMainWindow):
         r = r if isinstance(r, dict) else {}
         for line in (r.get("stdout") or []):
             self.add_out(line, "info")
-        level = "ok" if r.get("ok") else "bad"
-        self.add_out(f"[{'OK' if r.get('ok') else 'X'}] {r.get('service', r.get('error'))}", level)
+        self.flash_msg(str(r.get("service", r.get("error")) or ""),
+                       "ok" if r.get("ok") else "bad")
 
     # ---------- Статус ----------
     def refresh(self) -> None:
@@ -799,19 +1158,22 @@ class MainWindow(QMainWindow):
     def apply_best_strategy(self) -> None:
         """Читает 'Best strategy' из последнего test_results_*.txt и применяет её
         тем же путём, что и кнопка Apply (проверка прав, фон, перезапуск службы)."""
-        self.add_out(f">>> {t('ui.apply_best')}...", "info")
         self.submit_action(service_manager.best_strategy, self._best_done)
 
     def _best_done(self, r: Any) -> None:
         r = r if isinstance(r, dict) else {}
         if not r.get("ok"):
-            self.add_out(f"[?] {r.get('reason') or t('tests.best_none')}", "warn")
+            self.flash_msg(r.get("reason") or t("tests.best_none"), "warn")
             return
         sid = r["strategy"]
-        self.add_out(t("ui.best_found", s=sid), "ok")
         self.strat_box.blockSignals(True)
         self.strat_box.setCurrentText(sid)
         self.strat_box.blockSignals(False)
+        # Подтверждение: применение перезапускает службу — решает пользователь
+        ans = QMessageBox.question(self, t("ui.best_confirm_title"),
+                                   t("ui.best_confirm_text", s=sid))
+        if ans != QMessageBox.StandardButton.Yes:
+            return
         self._best_pending = True  # если apply_strategy не выстрелит — _apply_done отчитается (D4)
         self.apply_strategy()
 
@@ -845,8 +1207,8 @@ class MainWindow(QMainWindow):
     def _fakes_replaced(self, r: Any) -> None:
         r = r if isinstance(r, dict) else {}
         ok = r.get("ok", False)
-        self.add_out(f"[{'OK' if ok else 'X'}] {r.get('stdout') or r.get('stderr')}",
-                     "ok" if ok else "bad")
+        self.flash_msg(str(r.get("stdout") or r.get("stderr") or ""),
+                       "ok" if ok else "bad")
 
     def closeEvent(self, ev: QCloseEvent) -> None:
         if self.tray is not None and not self._exiting:

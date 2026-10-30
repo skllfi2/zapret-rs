@@ -25,7 +25,9 @@ from zapret_core.lists import (ipset_update, ipset_status, toggle_ipset,
 from zapret_core.settings import (game_filter_status, game_filter_label,
                                   set_game_filter, check_updates_flag,
                                   toggle_check_updates, local_version)
-from zapret_core.updates import check_updates
+from zapret_core.updates import apply_zapret_update, check_updates
+from zapret_core.selfupdate import (APP_VERSION, SELF_UPDATE_REPO, check_app_update,
+                                    update_app)
 from zapret_core.strategies import (list_strategies, parse_strategy_args,
                                     apply_strategy, current_strategy,
                                     default_strategy, format_exe_args,

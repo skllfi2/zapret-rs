@@ -133,6 +133,73 @@ STRINGS = {
         "en": "New version available: {r} (local: {l}). "
               "https://github.com/Flowseal/zapret-discord-youtube/releases/latest"},
 
+    # ---------- обновление zapret (apply_zapret_update) ----------
+    "sm.upd_need_admin": {
+        "ru": "Обновление zapret требует прав администратора",
+        "en": "Updating zapret requires administrator rights"},
+    "sm.upd_check_failed": {
+        "ru": "Не удалось получить релиз с GitHub — обновление отменено",
+        "en": "Failed to fetch the release from GitHub — update cancelled"},
+    "sm.upd_no_zip": {
+        "ru": "В релизе нет zip-архива — обновление отменено",
+        "en": "Release has no zip archive — update cancelled"},
+    "sm.upd_bad_archive": {
+        "ru": "Архив релиза не похож на копию zapret (нет bin/winws.exe) — обновление отменено",
+        "en": "Release archive does not look like a zapret copy (no bin/winws.exe) — update cancelled"},
+    "sm.upd_downloading": {
+        "ru": "Скачиваю zapret {v}...",
+        "en": "Downloading zapret {v}..."},
+    "sm.upd_backuping": {
+        "ru": "Создаю бэкап текущей копии...",
+        "en": "Backing up the current copy..."},
+    "sm.upd_reapplying": {
+        "ru": "Пере-применяю текущую стратегию к обновлённой копии...",
+        "en": "Re-applying the current strategy to the updated copy..."},
+    "sm.upd_done": {
+        "ru": "zapret обновлён до {v}, стратегия пере-применена",
+        "en": "zapret updated to {v}, strategy re-applied"},
+    "sm.upd_reapply_failed": {
+        "ru": "zapret обновлён, но стратегию пере-применить не удалось: {e}",
+        "en": "zapret updated, but re-applying the strategy failed: {e}"},
+    "sm.upd_failed": {
+        "ru": "Обновление zapret не удалось: {e}",
+        "en": "zapret update failed: {e}"},
+
+    # ---------- самообновление приложения (selfupdate) ----------
+    "sm.app_upd_unconfigured": {
+        "ru": "Источник обновлений приложения не настроен (репозиторий не указан)",
+        "en": "App update source is not configured (no repository set)"},
+    "sm.app_upd_check_failed": {
+        "ru": "Не удалось проверить обновления приложения (сеть/GitHub)",
+        "en": "Failed to check for app updates (network/GitHub)"},
+    "sm.app_upd_latest": {
+        "ru": "Приложение актуально (v{l})",
+        "en": "App is up to date (v{l})"},
+    "sm.app_upd_new": {
+        "ru": "Доступна новая версия приложения: v{r} (текущая: v{l})",
+        "en": "New app version available: v{r} (current: v{l})"},
+    "sm.app_upd_downloading": {
+        "ru": "Скачиваю обновление приложения...",
+        "en": "Downloading app update..."},
+    "sm.app_upd_applying": {
+        "ru": "Применяю обновление приложения...",
+        "en": "Applying app update..."},
+    "sm.app_upd_done": {
+        "ru": "Обновление применено — приложение перезапустится",
+        "en": "Update applied — the app will restart"},
+    "sm.app_upd_no_exe": {
+        "ru": "В релизе нет исполняемого файла {e} — обновление отменено",
+        "en": "Release has no executable {e} — update cancelled"},
+    "sm.app_upd_no_zip": {
+        "ru": "В релизе нет zip-архива с исходниками — обновление отменено",
+        "en": "Release has no source zip archive — update cancelled"},
+    "sm.app_upd_bad_archive": {
+        "ru": "Архив релиза не содержит zapret_pyside.py — обновление отменено",
+        "en": "Release archive does not contain zapret_pyside.py — update cancelled"},
+    "sm.app_upd_failed": {
+        "ru": "Обновление приложения не удалось: {e}",
+        "en": "App update failed: {e}"},
+
     # ---------- hosts / payload ----------
     "sm.hosts_summary": {
         "ru": "hosts: {n} строк, записей youtube/youtu.be: {y}",
@@ -432,4 +499,50 @@ STRINGS = {
     "ui.crash_msg": {
         "ru": "Приложение продолжит работу.\nПодробности записаны в лог:\n{p}",
         "en": "The application will continue.\nDetails were written to the log:\n{p}"},
+
+    # ---------- диалог обновлений ----------
+    "ui.upd_title": {"ru": "Обновления", "en": "Updates"},
+    "ui.upd_zapret_sec": {"ru": "zapret (файлы обхода DPI)", "en": "zapret (DPI bypass files)"},
+    "ui.upd_app_sec": {"ru": "zapret-simple (приложение)", "en": "zapret-simple (the app)"},
+    "ui.upd_checking": {"ru": "Проверяю...", "en": "Checking..."},
+    "ui.upd_disabled": {"ru": "Проверка отключена в настройках zapret", "en": "Check is disabled in zapret settings"},
+    "ui.upd_local_ver": {"ru": "Локальная версия: {v}", "en": "Local version: {v}"},
+    "ui.upd_none": {"ru": "Обновлений нет", "en": "No updates"},
+    "ui.upd_btn_zapret": {"ru": "Обновить zapret", "en": "Update zapret"},
+    "ui.upd_btn_app": {"ru": "Обновить приложение", "en": "Update the app"},
+    "ui.upd_btn_check": {"ru": "Проверить снова", "en": "Check again"},
+    "ui.dlg_close": {"ru": "Закрыть", "en": "Close"},
+    "ui.working": {"ru": "Проверяю...", "en": "Checking..."},
+    "ui.upd_busy": {"ru": "Обновление уже выполняется...", "en": "An update is already in progress..."},
+    "ui.upd_confirm_zapret": {
+        "ru": "Обновить zapret до {v}?\nТекущая копия будет сохранена в бэкап, "
+              "служба остановится и перезапустится с текущей стратегией.",
+        "en": "Update zapret to {v}?\nThe current copy will be backed up, "
+              "the service will stop and restart with the current strategy."},
+    "ui.upd_confirm_app": {
+        "ru": "Обновить приложение до v{v}?\nПриложение перезапустится.",
+        "en": "Update the app to v{v}?\nThe app will restart."},
+    # ---------- диалог статуса ----------
+    "ui.status_title": {"ru": "Статус службы", "en": "Service Status"},
+    "ui.status_service": {"ru": "Служба:", "en": "Service:"},
+    "ui.status_winws": {"ru": "winws.exe:", "en": "winws.exe:"},
+    "ui.status_version": {"ru": "Версия zapret:", "en": "zapret version:"},
+    "ui.status_strategy": {"ru": "Стратегия:", "en": "Strategy:"},
+    "ui.status_running": {"ru": "запущен", "en": "running"},
+    "ui.status_stopped": {"ru": "остановлен", "en": "stopped"},
+    # ---------- диалог диагностики ----------
+    "ui.diag_title": {"ru": "Диагностика", "en": "Diagnostics"},
+    "ui.diag_counts": {"ru": "Итог: {ok} ok, {warn} предупреждений, {bad} ошибок",
+                       "en": "Total: {ok} ok, {warn} warnings, {bad} errors"},
+    "ui.diag_no_checks": {"ru": "Диагностика не вернула проверок", "en": "Diagnostics returned no checks"},
+    # ---------- подтверждение лучшей стратегии ----------
+    "ui.best_confirm_title": {"ru": "Лучшая стратегия", "en": "Best strategy"},
+    "ui.best_confirm_text": {
+        "ru": "Тесты определили лучшую стратегию: {s}.\nПрименить её? "
+              "(служба будет перезапущена)",
+        "en": "Tests determined the best strategy: {s}.\nApply it? "
+              "(the service will be restarted)"},
+    # ---------- панель вывода: тумблер ----------
+    "ui.out_show": {"ru": "Показать вывод", "en": "Show output"},
+    "ui.out_hide": {"ru": "Скрыть вывод", "en": "Hide output"},
 }

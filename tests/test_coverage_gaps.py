@@ -694,7 +694,8 @@ class TestRouterDispatch(unittest.TestCase):
                 "list_fakes", "check_updates", "ipset_update", "update_hosts",
                 "clear_discord", "admin_use", "menu_status", "set_game_filter",
                 "toggle_check_updates", "toggle_ipset", "apply_strategy",
-                "best_strategy", "replace_fakes"]
+                "best_strategy", "replace_fakes",
+                "apply_zapret_update", "check_app_update", "update_app"]
     TUPLE_FNS = ["install_service", "uninstall_service", "start_service", "stop_service"]
 
     def _stack(self):
@@ -724,7 +725,7 @@ class TestRouterDispatch(unittest.TestCase):
                    "update_ipset", "8", "update_hosts", "hosts_update", "9", "clear_discord",
                    "admin", "admin_use", "menu_status", "set_game_filter",
                    "toggle_check_updates", "toggle_ipset", "apply_strategy", "relaunch_admin",
-                   "best_strategy"]
+                   "best_strategy", "update_zapret", "check_app_update", "update_app"]
         with self._stack():
             for a in actions:
                 with self.subTest(action=a):
