@@ -15,6 +15,7 @@ test_result.txt
 dist/
 build/
 *.spec
+release-artifacts/
 
 # Test, lint and typing caches
 .coverage
