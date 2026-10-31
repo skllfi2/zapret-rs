@@ -3,32 +3,45 @@
 Десктопный интерфейс для управления [zapret](https://github.com/Flowseal/zapret-discord-youtube)
 (DPI-bypass через `winws.exe`) — **без** интерактивного `service.bat`.
 
-Единственный вариант программы: **настольное приложение на PySide6**.
+Доступно два независимых варианта интерфейса:
+1. **PySide6 (Qt 6, Python)** — полнофункциональный интерфейс со всеми системными диалогами, треем и живым выводом тестов.
+2. **Slint (Rust, Native)** — сверхбыстрый автономный бинарник (~10 МБ, старт <20 мс, ~15 МБ RAM, прямые Win32 API вызовы без запуска `tasklist`/консолей).
 
 ## Как это устроено
 
 | Файл / каталог | Роль |
 |---|---|
-| `zapret_core/` | **Ядро** (бывший `service_manager.py`, разбитый на модули): `paths` (автоопределение каталога zapret), `scm` (служба Windows через pywin32), `winws` (процессы и fake-payload), `lists` (ipset/user-списки/hosts), `settings` (тумблеры `utils/*`), `updates` (обновления zapret: проверка версии и применение релиза GitHub с бэкапом), `selfupdate` (самообновление приложения; репозиторий настраивается константой `SELF_UPDATE_REPO`), `strategies` (разбор и применение стратегий), `menu` (шапка меню), `diagnostics` (18 проверок), `tests_runner` (запуск `test zapret.ps1`), `misc` (права/скрытые команды/перезапуск UAC), `router` (маршрутизатор действий), `applog` (лог-файл и перехват крашей). |
+| `zapret_core/` | **Python-ядро**: `paths` (каскад автоопределения каталога zapret), `scm` (служба Windows через pywin32 / direct API), `winws` (процессы и fake-payload, in-process Win32 ToolHelp), `lists` (ipset/user-списки/hosts), `settings` (тумблеры `utils/*`), `updates` (обновления zapret: проверка версии и применение релиза GitHub с бэкапом), `selfupdate` (самообновление приложения), `strategies` (разбор и применение стратегий напрямую), `menu` (шапка меню), `diagnostics` (18 проверок), `tests_runner` (запуск `test zapret.ps1`), `misc` (быстрый опрос процессов без tasklist, запуск оригинального service.bat), `router` (маршрутизатор действий), `applog` (лог-файл и перехват крашей). |
 | `service_manager.py` | **Публичный фасад**: реэкспорт всего API ядра — импорты `from service_manager import X` работают как раньше и служат точкой патчинга для тестов. |
-| `zapret_pyside.py` | **Единственный UI (PySide6 6.12, Qt 6).** Структура меню как в оригинальном `service.bat` (секции `:: SERVICE/SETTINGS/UPDATES/TOOLS`, пункты, статусы в `[]`), тёмная тема, фоновые потоки `QThreadPool`, живой вывод тестов через сигнал, трей. Панель вывода скрыта по умолчанию (кнопка в шапке); статус службы, обновления и диагностика показываются в диалоговых окнах, краткие итоги действий — флеш-строкой в шапке. |
+| `zapret_pyside.py` | **UI на PySide6 (Qt 6).** Структура меню как в оригинальном `service.bat`, тёмная тема, фоновые потоки `QThreadPool`, трей, диалоги статуса и обновлений. |
+| `zapret-slint/` | **Нативный UI на Rust + Slint.** Автономный бинарник в `target/release/zapret-slint.exe` без внешних зависимостей. |
+| `start-slint.bat` | Запуск Slint-версии (с автосборкой при первом запуске). |
 | `i18n.py` | Словарь локализации ru/en для ядра и UI + хранение выбора языка. |
-| `build_exe.py` / `.bat` | Сборка одиночного portable-exe (см. ниже). |
+| `build_exe.py` / `.bat` | Сборка одиночного portable-exe для Python-версии. |
 | `ruff.toml` | Конфиг линта (pyflakes, bugbear, isort, `E4/E7/E9`). |
 
-Каталог с самим zapret (`bin/winws.exe`, `lists/`, `service.bat`) определяется автоматически:
-переменная окружения `ZAPRET_DIR` → `%LOCALAPPDATA%\AppWatch\Apps\zapret-discord-youtube`
-→ `~/Pictures\zapret-discord-youtube`.
+### Автоопределение каталога zapret (каскадный поиск)
 
-Удалены (оставлен только PySide6): веб-вариант (`main.py`, `index.html`, `start.bat`,
-Flask) и tkinter-вариант (`zapret-tkinter.py`).
+Каталог с самим zapret (`bin/winws.exe`, `lists/`, `service.bat`) определяется по каскаду:
+1. Переменная окружения `ZAPRET_DIR`
+2. Ранее сохранённый пользователем каталог в `%LOCALAPPDATA%\zapret-simple\ui_settings.json`
+3. Локальный каталог `./zapret/` или корень приложения
+4. `%LOCALAPPDATA%\zapret-simple\zapret`
+5. Legacy-пути: `%LOCALAPPDATA%\AppWatch\Apps\zapret-discord-youtube` → `~/Pictures\zapret-discord-youtube`
+
+### Независимость от обновлений zapret и service.bat
+
+- **Обновление zapret:** Приложение не зависит от жестко зашитых стратегий — оно динамически считывает все `*.bat` файлы из папки zapret и парсит параметры запуска `winws.exe`. Если выходит новый релиз zapret с новыми стратегиями, они сразу появляются в UI.
+- **Изменения в service.bat:** Управление службой (`start`, `stop`, `install`, `change config`) выполняется напрямую через Windows Service Control Manager (Win32 SCM API), поэтому любые изменения в `service.bat` не ломают приложение.
+- **Оригинальное меню:** Для доступа к специфическим функциям `service.bat` предусмотрена кнопка *«Оригинальное меню zapret (service.bat)»*, запускающая батник автора в отдельном окне.
 
 ## Запуск
 
 ```bat
-start-gui.bat             # десктопный UI на PySide6 (единственный вариант)
-python zapret_pyside.py   # то же самое напрямую
-dist\zapret-simple.exe    # portable-exe без Python (после сборки, см. ниже)
+start-gui.bat             # десктопный UI на PySide6
+start-slint.bat           # сверхбыстрый нативный UI на Rust + Slint
+python zapret_pyside.py   # прямой запуск PySide6
+dist\zapret-simple.exe    # portable-exe без Python (после сборки)
 update.bat                # проверка обновлений (service_manager.check_updates)
 ```
 
@@ -55,6 +68,12 @@ PySide6 ставится только `Essentials` (~215 МБ) — метапа�
 
 - **Копировать / Сохранить… / Очистить** — кнопки над панелью вывода (скрыта по умолчанию,
   показывается по кнопке в шапке и автоматически при живом выводе тестов/списков).
+- **DNS over HTTPS (DoH)** — диалог настройки шифрования DNS на уровне Windows с поддержкой
+  IPv4 и IPv6 (Cloudflare, Google, Quad9, AdGuard) и включением Auto-DoH в реестре.
+- **Звуковые уведомления** — отключаемые звуки системных событий (успех, сбой, подключение).
+- **Автозагрузка** — запуск вместе с Windows в свернутом виде в трей (`--minimized`).
+- **Выбор папки и распаковка ZIP** — распаковка дистрибутива zapret с защитой от Zip Slip и валидацией `bin/winws.exe`.
+- **Быстрая проверка доступности** — мгновенный замер latency и доступности YouTube, Discord и Google без запуска долгого теста.
 - **Применить лучшую стратегию** — читает строку `Best strategy: X.bat` из последнего
   `utils/test results/test_results_*.txt`, выбирает стратегию в списке, спрашивает
   подтверждение (служба перезапускается) и применяет её тем же фоновым путём, что и
@@ -104,17 +123,18 @@ Update Hosts / Check for Updates), `:: TOOLS` (Run Diagnostics / Run Tests).
 ## Тесты и качество кода
 
 ```bat
-python -m unittest discover -s tests -v   # 202 теста: ядро, i18n, UI/tray (offscreen), smoke-скрипт
+python -m unittest discover -s tests -v   # 272 теста: ядро, i18n, UI/tray (offscreen), DoH, звуки, автозапуск
 python test_verify.py                     # офлайн-проверки структуры без запуска окна
 python -m ruff check .                    # линт (конфиг в ruff.toml) — 0 ошибок
 python -m mypy                            # типизация (mypy.ini) — 0 ошибок
+python -m coverage report                 # покрытие кода > 90%
 ```
 
 Команды выше должны выполняться **интерпретатором с установленными зависимостями**
 (`pip install -r requirements-dev.txt`): голый PATH-`python` без пакетов упадёт на импортах.
 Если PATH-питон не тот — подставь свой: `C:\...\pythoncore-3.15-64\python.exe -m ruff check .`
-(тот же принцип — в `.bat`-скриптах и хуке `hooks/pre-commit`: захардкоженный путь →
-`py -3.15` → `python`).
+(тот же принцип — в `.bat`-скриптах и хуке `hooks/pre-commit`: внешняя переменная `PYTHON`/`PY` →
+локальный путь → `py -3.15` → `python`).
 
 Сигнатуры всех функций `zapret_core` типизированы (аннотации параметров и возвратов).
 

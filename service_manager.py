@@ -13,7 +13,11 @@ import win32serviceutil  # noqa: F401
 
 from zapret_core.paths import (ORIG_DIR, BIN_DIR, LISTS_DIR, SERVICE_NAME,
                                SERVICE_DISPLAY, APP_DIR, STRATEGY_FILE,
-                               LEGACY_STRATEGY_FILE, get_bin_path, _detect_orig_dir)
+                               LEGACY_STRATEGY_FILE, get_bin_path, _detect_orig_dir,
+                               set_zapret_dir, reload_paths, set_custom_zapret_dir,
+                               unpack_zapret_archive)
+from zapret_core.autostart import (is_autostart_enabled, set_autostart_enabled,
+                                   toggle_autostart)
 from zapret_core.scm import (install_service, uninstall_service, start_service,
                              stop_service, set_autostart, SERVICE_STATES,
                              query_status, is_running)
@@ -38,7 +42,10 @@ from zapret_core.diagnostics import (tcp_timestamps, run_diagnostics,
 from zapret_core.tests_runner import (tests_prerequisites, run_tests,
                                       _latest_test_result, best_strategy)
 from zapret_core.misc import (is_admin, admin_use, hidden_cmd, clear_discord,
-                              relaunch_as_admin, decode_output)
+                              relaunch_as_admin, decode_output, open_original_service,
+                              cleanup_orphans, check_connectivity)
+from zapret_core.doh import (DOH_PROVIDERS, get_doh_status, set_doh, disable_doh)
+from zapret_core.sound import (play_sound, is_sound_enabled, set_sound_enabled, toggle_sound)
 from zapret_core.router import run_service_action
 
 __all__ = [n for n in dir() if not n.startswith("__")]

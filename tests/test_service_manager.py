@@ -212,7 +212,8 @@ class TestServiceManager(unittest.TestCase):
             self.assertTrue(r["ok"], r)
             self.assertIn("ACTIVE_DISCORD_UDP.bin", r["copied"])
             self.assertIn("ACTIVE_GAME_UDP.bin", r["skipped"])  # не перезаписан
-            self.assertEqual(open(os.path.join(dst, "ACTIVE_GAME_UDP.bin"), "rb").read(), b"MANUAL")
+            with open(os.path.join(dst, "ACTIVE_GAME_UDP.bin"), "rb") as f_active:
+                self.assertEqual(f_active.read(), b"MANUAL")
             self.assertFalse(os.path.exists(os.path.join(dst, "winws.exe")))  # только .bin
             # повторный вызов — копировать нечего
             r2 = restore_payloads(dest_dir=dst, source_dir=src)

@@ -47,11 +47,21 @@ def game_filter_status() -> dict:
 # === МЕНЮ: версия и тумблеры (порт :menu/:ipset_switch/:check_updates_switch) ===
 
 def local_version() -> str | None:
-    """LOCAL_VERSION из service.bat (как в шапке оригинального меню)."""
+    """LOCAL_VERSION из service.bat или version.txt."""
     try:
-        with open(os.path.join(ORIG_DIR, "service.bat"), encoding="utf-8", errors="replace") as f:
-            m = re.search(r'set\s+"LOCAL_VERSION=([^"]+)"', f.read())
-            return m.group(1).strip() if m else None
+        bat = os.path.join(ORIG_DIR, "service.bat")
+        if os.path.isfile(bat):
+            with open(bat, encoding="utf-8", errors="replace") as f:
+                m = re.search(r'set\s+"LOCAL_VERSION=([^"]+)"', f.read())
+                if m:
+                    return m.group(1).strip()
+        ver_file = os.path.join(ORIG_DIR, "version.txt")
+        if os.path.isfile(ver_file):
+            with open(ver_file, encoding="utf-8", errors="replace") as f:
+                v = f.read().strip()
+                if v:
+                    return v
+        return None
     except OSError:
         return None
 

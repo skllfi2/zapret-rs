@@ -50,6 +50,17 @@ def _latest_test_result() -> str | None:
     except OSError:
         return None
 
+def _kill_tree(p: subprocess.Popen) -> None:
+    try:
+        subprocess.run(["taskkill", "/F", "/T", "/PID", str(p.pid)],
+                       capture_output=True, creationflags=0x08000000, timeout=5)
+    except Exception:
+        try:
+            p.kill()
+        except Exception:
+            pass
+
+
 def run_tests(on_line: Callable | None = None, test_type: int = 1, mode: int = 1,
               selection: list[str] | None = None, timeout: int = 1800,
               should_stop: Callable[[], bool] | None = None) -> dict:
@@ -109,11 +120,11 @@ def run_tests(on_line: Callable | None = None, test_type: int = 1, mode: int = 1
         while True:
             if should_stop is not None and should_stop():
                 stopped = True
-                p.kill()
+                _kill_tree(p)
                 lines.append(t("tests.stopped"))
                 break
             if time.time() > deadline:
-                p.kill()
+                _kill_tree(p)
                 lines.append(t("tests.timeout"))
                 break
             try:
@@ -137,9 +148,13 @@ def run_tests(on_line: Callable | None = None, test_type: int = 1, mode: int = 1
         except Exception:
             pass
         try:
-            p.wait(timeout=15)
+            stdout.close()
         except Exception:
-            p.kill()
+            pass
+        try:
+            p.wait(timeout=10)
+        except Exception:
+            _kill_tree(p)
     # Итог из последнего файла результатов (Best strategy и аналитика)
     tail = ""
     res_file = _latest_test_result()

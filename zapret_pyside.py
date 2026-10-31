@@ -102,6 +102,14 @@ QPushButton:focus {{ border-color: {COLORS['accent']}; }}
 QPushButton:disabled {{ color: {COLORS['text_muted']}; background-color: {COLORS['bg_main']};
     border-color: {COLORS['border']}; }}
 QPushButton#small {{ padding: 4px 12px; font-size: 8pt; text-align: center; }}
+QPushButton#primary {{ background-color: #1a2333; color: #9bb7ff; border: 1px solid #334b73; }}
+QPushButton#primary:hover {{ background-color: #24334d; border-color: {COLORS['accent']}; color: #ffffff; }}
+QPushButton#accent {{ background-color: #15241b; color: #7fe89d; border: 1px solid #224d32; }}
+QPushButton#accent:hover {{ background-color: #1e3828; border-color: {COLORS['success']}; color: #ffffff; }}
+QPushButton#danger {{ background-color: #251618; color: #f28b8b; border: 1px solid #52272c; }}
+QPushButton#danger:hover {{ background-color: #381e22; border-color: {COLORS['danger']}; color: #ffffff; }}
+QLabel#statusBadge {{ background-color: {COLORS['bg_main']}; color: {COLORS['text_secondary']};
+    border: 1px solid {COLORS['border']}; border-radius: 6px; padding: 4px 10px; font-weight: bold; font-size: 8.5pt; }}
 
 QComboBox, QSpinBox {{ background-color: {COLORS['button_bg']}; color: {COLORS['text_primary']};
     border: 1px solid {COLORS['border']}; border-radius: 8px; padding: 6px 10px; font-size: 9pt; }}
@@ -183,6 +191,7 @@ class FakeDialog(QDialog):
     """Замена fake-файла (аналог :replace_active_fakes_prompt)."""
     def __init__(self, parent: QWidget | None = None) -> None:
         super().__init__(parent)
+        self.setAttribute(Qt.WidgetAttribute.WA_DeleteOnClose, True)
         self.setWindowTitle(t("ui.fake_dialog_title"))
         form = QFormLayout(self)
         self.kind = QComboBox()
@@ -246,6 +255,7 @@ class UpdatesDialog(QDialog):
 
     def __init__(self, win: "MainWindow") -> None:
         super().__init__(win)
+        self.setAttribute(Qt.WidgetAttribute.WA_DeleteOnClose, True)
         self._win = win
         self._zapret_new: str | None = None
         self._app_new: str | None = None
@@ -394,6 +404,7 @@ class StatusDialog(QDialog):
 
     def __init__(self, win: "MainWindow") -> None:
         super().__init__(win)
+        self.setAttribute(Qt.WidgetAttribute.WA_DeleteOnClose, True)
         self.setWindowTitle(t("ui.status_title"))
         self.setMinimumWidth(440)
         lay = QVBoxLayout(self)
@@ -451,6 +462,7 @@ class DiagnosticsDialog(QDialog):
 
     def __init__(self, win: "MainWindow") -> None:
         super().__init__(win)
+        self.setAttribute(Qt.WidgetAttribute.WA_DeleteOnClose, True)
         self.setWindowTitle(t("ui.diag_title"))
         self.setMinimumSize(560, 440)
         lay = QVBoxLayout(self)
@@ -500,6 +512,111 @@ class DiagnosticsDialog(QDialog):
                 url.setStyleSheet(f"color: {COLORS['text_muted']};")
                 self._checks_lay.addWidget(url)
         self._counts.setText(t("ui.diag_counts", ok=ok, warn=warn, bad=bad))
+        service_manager.play_sound("done")
+
+
+class DohDialog(QDialog):
+    """Диалог настройки DNS over HTTPS (DoH) на уровне Windows."""
+
+    def __init__(self, win: "MainWindow") -> None:
+        super().__init__(win)
+        self.setAttribute(Qt.WidgetAttribute.WA_DeleteOnClose, True)
+        self._win = win
+        self.setWindowTitle(t("ui.doh_title"))
+        self.setMinimumWidth(480)
+        lay = QVBoxLayout(self)
+        lay.setSpacing(12)
+
+        card = QFrame()
+        card.setObjectName("card")
+        cl = QVBoxLayout(card)
+        sec = QLabel(t("ui.doh_sec"))
+        sec.setObjectName("section")
+        cl.addWidget(sec)
+
+        self.status_lbl = QLabel(t("ui.working"))
+        self.status_lbl.setWordWrap(True)
+        cl.addWidget(self.status_lbl)
+
+        # Выбор провайдера
+        prow = QHBoxLayout()
+        plbl = QLabel(t("ui.doh_provider"))
+        prow.addWidget(plbl)
+        self.provider_combo = QComboBox()
+        self.provider_combo.addItem("Cloudflare (1.1.1.1 — быстрый DoH)", "cloudflare")
+        self.provider_combo.addItem("Google DNS (8.8.8.8 — надёжный)", "google")
+        self.provider_combo.addItem("Quad9 (9.9.9.9 — приватный без логов)", "quad9")
+        self.provider_combo.addItem("AdGuard (94.140.14.14 — фильтрация рекламы)", "adguard")
+        prow.addWidget(self.provider_combo, 1)
+        cl.addLayout(prow)
+
+        brow = QHBoxLayout()
+        self.apply_btn = QPushButton(t("ui.doh_apply"))
+        self.apply_btn.clicked.connect(self._apply_doh)
+        brow.addWidget(self.apply_btn)
+
+        self.disable_btn = QPushButton(t("ui.doh_disable"))
+        self.disable_btn.clicked.connect(self._disable_doh)
+        brow.addWidget(self.disable_btn)
+        cl.addLayout(brow)
+
+        lay.addWidget(card)
+
+        row = QHBoxLayout()
+        row.addStretch()
+        close = QPushButton(t("ui.dlg_close"))
+        close.clicked.connect(self.accept)
+        row.addWidget(close)
+        lay.addLayout(row)
+
+        self._refresh()
+
+    def _refresh(self) -> None:
+        self._win.submit(service_manager.get_doh_status, self._on_status)
+
+    def _on_status(self, r: Any) -> None:
+        if not _q_alive(self):
+            return
+        r = r if isinstance(r, dict) else {}
+        pname = r.get("provider_name", "?")
+        srvs = ", ".join(r.get("servers") or [])
+        adps = ", ".join(r.get("adapters") or [])
+        autodoh_str = " (Auto-DoH активен)" if r.get("autodoh") else ""
+        self.status_lbl.setText(f"{t('ui.doh_status')} {pname}{autodoh_str}\nDNS IP: {srvs}\nАдаптеры: {adps}")
+        prov = r.get("provider")
+        if prov in ("cloudflare", "google", "quad9", "adguard"):
+            idx = self.provider_combo.findData(prov)
+            if idx >= 0:
+                self.provider_combo.setCurrentIndex(idx)
+
+    def _apply_doh(self) -> None:
+        provider = self.provider_combo.currentData()
+        self._win.submit(lambda: service_manager.set_doh(provider), self._on_action_done)
+
+    def _disable_doh(self) -> None:
+        self._win.submit(service_manager.disable_doh, self._on_action_done)
+
+    def _on_action_done(self, r: Any) -> None:
+        if not _q_alive(self):
+            return
+        r = r if isinstance(r, dict) else {}
+        msg = r.get("message") or r.get("error") or ""
+        if r.get("ok"):
+            service_manager.play_sound("done")
+            QMessageBox.information(self, t("ui.doh_title"), msg)
+        else:
+            service_manager.play_sound("alert")
+            QMessageBox.warning(self, t("ui.doh_title"), msg)
+        self._refresh()
+        self._win.refresh_menu_status()
+
+
+def _get_asset_path(*parts: str) -> str:
+    base = getattr(sys, "_MEIPASS", service_manager.APP_DIR)
+    p = os.path.join(base, "assets", *parts)
+    if os.path.exists(p):
+        return p
+    return os.path.join(service_manager.APP_DIR, "assets", *parts)
 
 
 class MainWindow(QMainWindow):
@@ -509,12 +626,17 @@ class MainWindow(QMainWindow):
     lbl_gf: QLabel
     lbl_ipset: QLabel
     lbl_upd: QLabel
+    lbl_doh: QLabel
 
     def __init__(self) -> None:
         super().__init__()
         self.setWindowTitle("ZAPRET SERVICE MANAGER")
         self.resize(1120, 680)
         self.setMinimumSize(960, 520)
+
+        icon_path = _get_asset_path("app.ico")
+        if os.path.isfile(icon_path):
+            self.setWindowIcon(QIcon(icon_path))
 
         self.pool = QThreadPool.globalInstance()
         self._workers: set[Worker] = set()
@@ -596,6 +718,14 @@ class MainWindow(QMainWindow):
         self.lang_btn.setToolTip(t("ui.lang"))
         self.lang_btn.clicked.connect(self._switch_lang)
         srow.addWidget(self.lang_btn)
+        # Тумблер звуков
+        sound_enabled = service_manager.is_sound_enabled()
+        self.sound_btn = QPushButton("🔊" if sound_enabled else "🔇")
+        self.sound_btn.setObjectName("small")
+        self.sound_btn.setFixedSize(36, 26)
+        self.sound_btn.setToolTip(t("ui.sound_on") if sound_enabled else t("ui.sound_off"))
+        self.sound_btn.clicked.connect(self._toggle_sound)
+        srow.addWidget(self.sound_btn)
         left.addLayout(srow)
         h.addLayout(left, 1)
 
@@ -646,24 +776,24 @@ class MainWindow(QMainWindow):
         c.setSpacing(6)
         body.addWidget(card, 3)
 
-        # --- :: SERVICE (пункты 1-3 как в оригинале + Start/Stop) ---
+        # --- :: SERVICE (пункты службы + Start/Stop) ---
         sec_lbl = QLabel(t("ui.sec_service"))
         sec_lbl.setObjectName("section")
         c.addWidget(sec_lbl)
         g = QGridLayout()
         g.setSpacing(6)
-        self._menu_btn(g, 0, 0, t("ui.install_service"), lambda: self.run_action("service_install"))
-        self._menu_btn(g, 0, 1, t("ui.remove_services"), lambda: self.run_action("service_remove"))
+        self._menu_btn(g, 0, 0, t("ui.install_service"), lambda: self.run_action("service_install"), role="primary")
+        self._menu_btn(g, 0, 1, t("ui.remove_services"), lambda: self.run_action("service_remove"), role="danger")
+        self._menu_btn(g, 0, 2, t("ui.admin_rights"), self._relaunch_admin, role="accent")
         self._menu_btn(g, 1, 0, t("ui.check_status"), self._open_status)
-        self._menu_btn(g, 1, 1, t("ui.start_service"), lambda: self.run_action("start"))
-        self._menu_btn(g, 1, 2, t("ui.stop_service"), lambda: self.run_action("stop"))
-        self._menu_btn(g, 0, 2, t("ui.admin_rights"), self._relaunch_admin)
+        self._menu_btn(g, 1, 1, t("ui.start_service"), lambda: self.run_action("start"), role="accent")
+        self._menu_btn(g, 1, 2, t("ui.stop_service"), lambda: self.run_action("stop"), role="danger")
         g.setColumnStretch(0, 3)
         g.setColumnStretch(1, 3)
         g.setColumnStretch(2, 2)
         c.addLayout(g)
 
-        # --- :: SETTINGS (4-7, статусы в []) ---
+        # --- :: SETTINGS (статусы в бейджах) ---
         sec_lbl = QLabel(t("ui.sec_settings"))
         sec_lbl.setObjectName("section")
         c.addWidget(sec_lbl)
@@ -676,11 +806,15 @@ class MainWindow(QMainWindow):
         self._menu_btn(g, 2, 0, t("ui.autoupdate_check"), lambda: self.run_action("toggle_check_updates"))
         self._status_cell(g, 2, 1, "lbl_upd")
         self._menu_btn(g, 3, 0, t("ui.replace_fakes"), self.show_fakes)
+        self._menu_btn(g, 4, 0, t("ui.doh_sec"), self._open_doh)
+        self._status_cell(g, 4, 1, "lbl_doh")
+        self._menu_btn(g, 5, 0, t("ui.autostart"), self._toggle_autostart)
+        self._status_cell(g, 5, 1, "lbl_autostart")
         g.setColumnStretch(0, 2)
         g.setColumnStretch(1, 3)
         c.addLayout(g)
 
-        # --- :: UPDATES (8-10) ---
+        # --- :: UPDATES ---
         sec_lbl = QLabel(t("ui.sec_updates"))
         sec_lbl.setObjectName("section")
         c.addWidget(sec_lbl)
@@ -693,7 +827,7 @@ class MainWindow(QMainWindow):
         g.setColumnStretch(1, 1)
         c.addLayout(g)
 
-        # --- :: TOOLS (11-12 + доп. действия) ---
+        # --- :: TOOLS ---
         sec_lbl = QLabel(t("ui.sec_tools"))
         sec_lbl.setObjectName("section")
         c.addWidget(sec_lbl)
@@ -701,10 +835,14 @@ class MainWindow(QMainWindow):
         g.setSpacing(6)
         self._menu_btn(g, 0, 0, t("ui.run_diagnostics"), self.run_diagnostics)
         self._menu_btn(g, 0, 1, t("ui.run_tests"), self.run_tests)
-        self._menu_btn(g, 1, 0, t("ui.remove_conflicts"), lambda: self.run_action("remove_conflicts"))
+        self._menu_btn(g, 1, 0, t("ui.remove_conflicts"), lambda: self.run_action("remove_conflicts"), role="danger")
         self._menu_btn(g, 1, 1, t("ui.clear_discord"), lambda: self.run_action("clear_discord"))
         self._menu_btn(g, 2, 0, t("ui.restore_payload"), lambda: self.run_action("restore_payloads"))
-        self._menu_btn(g, 2, 1, t("ui.apply_best"), self.apply_best_strategy)
+        self._menu_btn(g, 2, 1, t("ui.apply_best"), self.apply_best_strategy, role="primary")
+        self._menu_btn(g, 3, 0, t("ui.open_original_service"), lambda: self.run_action("open_original_service"))
+        self._menu_btn(g, 3, 1, t("ui.select_folder"), self._choose_zapret_folder)
+        self._menu_btn(g, 4, 0, t("ui.unpack_zip"), self._unpack_zapret_zip)
+        self._menu_btn(g, 4, 1, t("ui.quick_check"), self._quick_check)
         g.setColumnStretch(0, 1)
         g.setColumnStretch(1, 1)
         c.addLayout(g)
@@ -718,6 +856,7 @@ class MainWindow(QMainWindow):
         o.setSpacing(6)
         self.output = QTextEdit()
         self.output.setReadOnly(True)
+        self.output.document().setMaximumBlockCount(2000)
         self.output.setMinimumWidth(360)
         # Заголовок панели + копирование/сохранение/очистка вывода
         out_head = QHBoxLayout()
@@ -773,8 +912,10 @@ class MainWindow(QMainWindow):
         self._flash_timer.start()
 
     def _menu_btn(self, grid: QGridLayout, row: int, col: int, text: str,
-                  cmd: Callable[..., None]) -> QPushButton:
+                  cmd: Callable[..., None], role: str = "") -> QPushButton:
         btn = QPushButton(text)
+        if role:
+            btn.setObjectName(role)
         btn.setMinimumHeight(34)
         btn.setCursor(Qt.CursorShape.PointingHandCursor)
         btn.clicked.connect(cmd)
@@ -793,6 +934,96 @@ class MainWindow(QMainWindow):
         self._init_tray()  # подписи меню трея тоже локализованы
         self.refresh()
         self.refresh_menu_status()
+
+    def _toggle_sound(self) -> None:
+        """Переключатель звука: инвертирует статус, сохраняет в настройки и обновляет кнопку."""
+        enabled = service_manager.toggle_sound()
+        self.sound_btn.setText("🔊" if enabled else "🔇")
+        self.sound_btn.setToolTip(t("ui.sound_on") if enabled else t("ui.sound_off"))
+        if enabled:
+            service_manager.play_sound("connect")
+
+    def _open_doh(self) -> None:
+        """Открытие диалога настройки DoH."""
+        DohDialog(self).exec()
+
+    def _toggle_autostart(self) -> None:
+        """Включение / отключение запуска zapret-simple вместе с Windows."""
+        enabled = service_manager.toggle_autostart()
+        if hasattr(self, "lbl_autostart"):
+            self.lbl_autostart.setText(f"[{t('ui.autostart_on') if enabled else t('ui.autostart_off')}]")
+        status_txt = t("ui.autostart_on") if enabled else t("ui.autostart_off")
+        self.flash_msg(f"{t('ui.autostart')} {status_txt}", "ok")
+        service_manager.play_sound("done")
+
+    def _choose_zapret_folder(self) -> None:
+        """Выбор пользователем каталога zapret вручную."""
+        folder = QFileDialog.getExistingDirectory(self, t("ui.choose_zapret_folder"),
+                                                 service_manager.ORIG_DIR)
+        if not folder:
+            return
+        ok, msg = service_manager.set_custom_zapret_dir(folder)
+        if ok:
+            service_manager.play_sound("done")
+            self.flash_msg(msg, "ok")
+            self._load_strategies()
+            self.update_status()
+            self.refresh_menu_status()
+        else:
+            service_manager.play_sound("alert")
+            self.flash_msg(msg, "bad")
+
+    def _unpack_zapret_zip(self) -> None:
+        """Распаковка скачанного архива zapret."""
+        zip_path, _ = QFileDialog.getOpenFileName(self, t("ui.choose_zapret_zip"),
+                                                  "", t("ui.zip_filter"))
+        if not zip_path:
+            return
+        self.flash_msg("Распаковка архива zapret...", "info")
+        self.submit_action(service_manager.unpack_zapret_archive, self._unpack_done, zip_path)
+
+    def _unpack_done(self, r: Any) -> None:
+        if not _q_alive(self):
+            return
+        if isinstance(r, tuple):
+            ok, msg = r
+        elif isinstance(r, dict):
+            ok, msg = r.get("ok", False), r.get("service", "")
+        else:
+            ok, msg = False, str(r)
+        if ok:
+            service_manager.play_sound("done")
+            self.flash_msg(str(msg), "ok")
+            self._load_strategies()
+            self.update_status()
+            self.refresh_menu_status()
+        else:
+            service_manager.play_sound("alert")
+            self.flash_msg(str(msg), "bad")
+
+    def _quick_check(self) -> None:
+        """Быстрая проверка доступности сервисов (YouTube, Discord, Google)."""
+        self.flash_msg(t("ui.working"), "info")
+        self.submit(service_manager.check_connectivity, self._quick_check_done)
+
+    def _quick_check_done(self, r: Any) -> None:
+        if not _q_alive(self):
+            return
+        r = r if isinstance(r, dict) else {}
+        targets = r.get("targets", [])
+        lines = []
+        for tg in targets:
+            name = tg.get("name")
+            ok = tg.get("ok")
+            lat = tg.get("latency_ms")
+            lat_str = f" ({lat} ms)" if lat is not None else ""
+            status = "OK" if ok else "FAIL"
+            lines.append(f"{name}: {status}{lat_str}")
+        summary = " | ".join(lines) if lines else "Нет данных"
+        all_ok = bool(r.get("ok", False))
+        self.flash_msg(summary, "ok" if all_ok else "bad")
+        self.add_out(f"[Check] {summary}", "ok" if all_ok else "bad")
+        service_manager.play_sound("done" if all_ok else "alert")
 
     # ---------- Трей ----------
     def _init_tray(self) -> None:
@@ -849,8 +1080,9 @@ class MainWindow(QMainWindow):
 
     def _status_cell(self, grid: QGridLayout, row: int, col: int, attr: str) -> None:
         lbl = QLabel("—")
-        lbl.setObjectName("status")
-        lbl.setAlignment(Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter)
+        lbl.setObjectName("statusBadge")
+        lbl.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        lbl.setMinimumHeight(34)
         setattr(self, attr, lbl)
         grid.addWidget(lbl, row, col)
 
@@ -960,6 +1192,8 @@ class MainWindow(QMainWindow):
         self.submit_action(service_manager.apply_strategy, self._apply_done, sid)
 
     def _apply_done(self, r: Any) -> None:
+        if not _q_alive(self):
+            return
         self.strat_box.setEnabled(True)
         self.apply_btn.setEnabled(True)
         r = r if isinstance(r, dict) else {}
@@ -968,10 +1202,15 @@ class MainWindow(QMainWindow):
             self._best_pending = False
             if not r.get("ok"):
                 # apply_best_strategy -> apply_strategy не удалась: честный итог (D4)
+                service_manager.play_sound("alert")
                 self.flash_msg(t("ui.best_fail", e=msg), "bad")
                 self.update_status()
                 self.refresh_menu_status()
                 return
+        if r.get("ok"):
+            service_manager.play_sound("connect")
+        else:
+            service_manager.play_sound("alert")
         self.flash_msg(str(msg or ""), "ok" if r.get("ok") else "bad")
         self.update_status()
         self.refresh_menu_status()
@@ -981,6 +1220,8 @@ class MainWindow(QMainWindow):
         self.submit_action(service_manager.run_service_action, self._action_done, action)
 
     def _action_done(self, r: Any) -> None:
+        if not _q_alive(self):
+            return
         level = "ok" if isinstance(r, dict) and r.get("ok") else "bad"
         lines: list[str] = []
         if isinstance(r, tuple):
@@ -1002,6 +1243,16 @@ class MainWindow(QMainWindow):
             self._show_output()
             for line in lines:
                 self.add_out(line, "info")
+        if level == "ok":
+            msg_str = str(msg).lower()
+            if any(k in msg_str for k in ("запущен", "started", "active", "применена", "applied", "running")):
+                service_manager.play_sound("connect")
+            elif any(k in msg_str for k in ("остановлен", "stopped", "удален", "removed")):
+                service_manager.play_sound("disconnect")
+            else:
+                service_manager.play_sound("done")
+        else:
+            service_manager.play_sound("alert")
         self.flash_msg(str(msg)[:200], level)
         self.update_status()
         self.refresh_menu_status()
@@ -1118,10 +1369,18 @@ class MainWindow(QMainWindow):
 
     def _status_done(self, d: Any) -> None:
         self._busy = False
+        if not _q_alive(self):
+            return
         d = d if isinstance(d, dict) else {}
         running = d.get("running", False)
-        self.status_text.setText(d.get("status", t("ui.status_unknown")))
-        color = COLORS["success"] if running else COLORS["danger"]
+        status_raw = str(d.get("status", t("ui.status_unknown")))
+        self.status_text.setText(status_raw)
+        if running:
+            color = COLORS["success"]
+        elif "stopped" in status_raw.lower() or "остановл" in status_raw.lower():
+            color = COLORS["warn"]
+        else:
+            color = COLORS["danger"]
         self.status_text.setStyleSheet(f"color: {color}; font-weight: bold;")
         self.dot.setStyleSheet(f"background-color: {color}; border-radius: 6px;")
         pl = d.get("payloads", {"ok": True, "missing": []})
@@ -1137,9 +1396,16 @@ class MainWindow(QMainWindow):
     def refresh_menu_status(self) -> None:
         """Статусы в квадратных скобках + версия (как шапка меню service.bat)."""
         self.submit(service_manager.run_service_action, self._menu_done, "menu_status")
+        self.submit(service_manager.get_doh_status, self._doh_done)
+
+    def _doh_done(self, doh: Any) -> None:
+        if not _q_alive(self):
+            return
+        if isinstance(doh, dict) and hasattr(self, "lbl_doh"):
+            self.lbl_doh.setText(f"[{doh.get('provider_name', '?')}]")
 
     def _menu_done(self, r: Any) -> None:
-        if not isinstance(r, dict):
+        if not _q_alive(self) or not isinstance(r, dict):
             return
         if r.get("version"):
             self.version_lbl.setText(f"v{r['version']}")
@@ -1150,6 +1416,9 @@ class MainWindow(QMainWindow):
         self.lbl_gf.setText(f"[{r.get('game_filter', '?')}]")
         self.lbl_ipset.setText(f"[{r.get('ipset', '?')}]")
         self.lbl_upd.setText(f"[{r.get('check_updates', '?')}]")
+        if hasattr(self, "lbl_autostart"):
+            on = service_manager.is_autostart_enabled()
+            self.lbl_autostart.setText(f"[{t('ui.autostart_on') if on else t('ui.autostart_off')}]")
         if not r.get("admin"):
             # Тонкое напоминание — в оригинале права тоже нужны для части пунктов
             pass
@@ -1217,6 +1486,8 @@ class MainWindow(QMainWindow):
             self.hide()
             return
         self._exiting = True  # should_stop воркера тестов увидит отказ и убьёт ps1
+        self.timer.stop()
+        self._flash_timer.stop()
         if not self.pool.waitForDone(3000):
             # Воркеры не завершились: их колбэки уже не выполнятся, процесс может
             # задержаться — фиксируем в лог (B2)
@@ -1229,6 +1500,9 @@ def main() -> int:
     applog.install_excepthook()
     app = QApplication(sys.argv)
     app.setStyleSheet(STYLESHEET)
+    icon_path = _get_asset_path("app.ico")
+    if os.path.isfile(icon_path):
+        app.setWindowIcon(QIcon(icon_path))
 
     # 2. Один экземпляр: именованный мьютекс ядра Windows
     mutex, already_running = _acquire_single_instance()
@@ -1250,7 +1524,10 @@ def main() -> int:
     w = MainWindow()
     ag = app.primaryScreen().availableGeometry()
     w.move(ag.center() - w.rect().center())
-    w.show()
+    if ("--minimized" in sys.argv or "--tray" in sys.argv) and w.tray is not None:
+        w.hide()
+    else:
+        w.show()
     code = app.exec()
     _release_mutex(mutex)
     return code

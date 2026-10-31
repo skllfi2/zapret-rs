@@ -1,22 +1,16 @@
 # winws.py — winws.exe: процессы, fake-payload файлы (*.bin), их восстановление
 import os
-import subprocess
+import time
 
 from i18n import t
 
+from .misc import is_process_running
 from .paths import BIN_DIR
 
 # === winws.exe управление (заменяет service.bat вызовы) ===
 
 def winws_is_running() -> bool:
-    try:
-        # Без text=True: tasklist отдаёт OEM-кодировку (cp866 и т.п.),
-        # декодирование в UTF-8 падало — проверяем байты напрямую.
-        res = subprocess.run(["tasklist", "/FI", "IMAGENAME eq winws.exe", "/FO", "CSV", "/NH"],
-                             capture_output=True, creationflags=0x08000000)
-        return b"winws.exe" in res.stdout.lower()
-    except Exception:
-        return False
+    return is_process_running("winws.exe")
 
 def replace_fakes(fake_type=None, number=None) -> dict:
     """Замена ACTIVE_*.bin на выбранный fake из bin/ (как :replace_active_fakes в service.bat).
@@ -44,7 +38,9 @@ def replace_fakes(fake_type=None, number=None) -> dict:
         if os.path.isfile(active):
             shutil.copy2(active, active + ".bak")  # откат
         shutil.copy2(source, active)
-        h = hashlib.sha256(open(source, "rb").read()).hexdigest()[:16]
+        with open(source, "rb") as f_src:
+            h = hashlib.sha256(f_src.read()).hexdigest()[:16]
+        invalidate_payloads_cache()
         return {"ok": True, "stdout": f"{active_name} <- {fakes[idx-1]} (sha256:{h})",
                 "stderr": "", "active": active_name, "source": fakes[idx - 1]}
     except OSError as e:
@@ -60,7 +56,8 @@ def list_fakes() -> dict:
             continue
         p = os.path.join(BIN_DIR, f)
         try:
-            h = hashlib.sha256(open(p, "rb").read()).hexdigest()[:16]
+            with open(p, "rb") as f_p:
+                h = hashlib.sha256(f_p.read()).hexdigest()[:16]
         except OSError:
             h = "?"
         items.append({"name": f, "sha256": h, "active": f.upper().startswith("ACTIVE_")})
@@ -127,27 +124,48 @@ def restore_payloads(dest_dir: str | None = None, source_dir: str | None = None)
             copied.append(f)
     except OSError as e:
         return {"ok": False, "stdout": "", "stderr": str(e)}
+    invalidate_payloads_cache()
     pl = payloads_status(dest)
     return {"ok": pl["ok"], "source": src, "dest": dest,
             "copied": copied, "skipped": skipped,
             "stdout": t("sm.payload_copied", c=len(copied), s=len(skipped), status=pl['stdout']),
             "stderr": pl.get("stderr", ""), "payloads": pl}
 
-def payloads_status(bin_dir: str | None = None) -> dict:
+_PAYLOADS_CACHE: tuple[float, dict] | None = None
+
+
+def invalidate_payloads_cache() -> None:
+    global _PAYLOADS_CACHE
+    _PAYLOADS_CACHE = None
+
+
+def payloads_status(bin_dir: str | None = None, max_age: float = 15.0) -> dict:
     """Проверка fake-payload файлов (*.bin), на которые ссылается winws.exe.
     В рабочей копии их может не быть (лежат в архиве версий) — тогда fake-стратегии не работают."""
-    bin_dir = bin_dir or BIN_DIR
-    if not os.path.isdir(bin_dir):
-        return {"ok": False, "missing": [bin_dir], "total": 0,
-                "stderr": t("sm.bin_dir_missing", d=bin_dir)}
+    global _PAYLOADS_CACHE
+    if bin_dir is None and _PAYLOADS_CACHE is not None:
+        ts, cached = _PAYLOADS_CACHE
+        if time.time() - ts < max_age:
+            return cached
+
+    target_dir = bin_dir or BIN_DIR
+    if not os.path.isdir(target_dir):
+        res = {"ok": False, "missing": [target_dir], "total": 0,
+               "stderr": t("sm.bin_dir_missing", d=target_dir)}
+        if bin_dir is None:
+            _PAYLOADS_CACHE = (time.time(), res)
+        return res
     try:
-        files = [f for f in os.listdir(bin_dir) if f.lower().endswith(".bin")]
+        files = [f for f in os.listdir(target_dir) if f.lower().endswith(".bin")]
     except OSError as e:
         return {"ok": False, "missing": [], "total": 0, "stderr": str(e)}
     # Обязательные для работы десинхронизации (как в строке winws сервиса)
     required = ["ACTIVE_DISCORD_UDP.bin", "ACTIVE_GAME_UDP.bin",
                 "quic_initial_www_google_com.bin", "tls_clienthello_www_google_com.bin"]
     missing = [r for r in required if r not in files]
-    return {"ok": not missing, "total": len(files), "missing": missing,
-            "stdout": t("sm.payloads_summary", n=len(files), m=len(missing)),
-            "stderr": (t("sm.payloads_missing", list=", ".join(missing))) if missing else ""}
+    res = {"ok": not missing, "total": len(files), "missing": missing,
+           "stdout": t("sm.payloads_summary", n=len(files), m=len(missing)),
+           "stderr": (t("sm.payloads_missing", list=", ".join(missing))) if missing else ""}
+    if bin_dir is None:
+        _PAYLOADS_CACHE = (time.time(), res)
+    return res

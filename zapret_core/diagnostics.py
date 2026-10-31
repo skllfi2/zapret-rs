@@ -10,7 +10,7 @@ import win32service
 
 from i18n import t
 
-from .misc import decode_output, is_admin
+from .misc import decode_output, is_admin, is_process_running
 from .paths import BIN_DIR, ORIG_DIR
 from .winws import winws_is_running
 
@@ -41,12 +41,7 @@ def _sc_service_names() -> list[str]:
         return []
 
 def _tasklist_running(image: str) -> bool:
-    try:
-        res = subprocess.run(["tasklist", "/FI", f"IMAGENAME eq {image}"],
-                             capture_output=True, creationflags=0x08000000, timeout=20)
-        return image.lower() in decode_output(res.stdout).lower()
-    except Exception:
-        return False
+    return is_process_running(image)
 
 def _check(name: str, level: str, msg: str, url: str = "") -> dict:
     return {"name": name, "level": level, "msg": msg, "url": url}
@@ -194,33 +189,29 @@ def run_diagnostics() -> dict:
             path = stack.pop()
             seen += 1
             try:
-                hk = winreg.OpenKey(winreg.HKEY_LOCAL_MACHINE, path)
+                with winreg.OpenKey(winreg.HKEY_LOCAL_MACHINE, path) as hk:
+                    i = 0
+                    while True:
+                        try:
+                            sub = winreg.EnumKey(hk, i)
+                        except OSError:
+                            break
+                        i += 1
+                        stack.append(path + "\\" + sub)
+                        if i > 200:
+                            break
             except OSError:
                 continue
-            try:
-                i = 0
-                while True:
-                    try:
-                        sub = winreg.EnumKey(hk, i)
-                    except OSError:
-                        break
-                    i += 1
-                    stack.append(path + "\\" + sub)
-                    if i > 200:
-                        break
-            finally:
-                winreg.CloseKey(hk)
+
             # значения DohFlags текущего ключа
             try:
-                hk2 = winreg.OpenKey(winreg.HKEY_LOCAL_MACHINE, path)
-                try:
-                    val, _ = winreg.QueryValueEx(hk2, "DohFlags")
-                    if isinstance(val, int) and val > 0:
-                        doh += 1
-                except OSError:
-                    pass
-                finally:
-                    winreg.CloseKey(hk2)
+                with winreg.OpenKey(winreg.HKEY_LOCAL_MACHINE, path) as hk2:
+                    try:
+                        val, _ = winreg.QueryValueEx(hk2, "DohFlags")
+                        if isinstance(val, int) and val > 0:
+                            doh += 1
+                    except OSError:
+                        pass
             except OSError:
                 pass
     except Exception:

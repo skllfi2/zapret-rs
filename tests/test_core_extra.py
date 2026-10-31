@@ -314,5 +314,40 @@ class TestAppLog(unittest.TestCase):
             threading.excepthook = old_thread_hook
 
 
+class TestPathsAndResilience(unittest.TestCase):
+    def test_open_original_service_missing(self):
+        from zapret_core.misc import open_original_service
+        with mock.patch("zapret_core.misc.ORIG_DIR", "C:\\nonexistent_zapret_dir_xyz"):
+            r = open_original_service()
+            self.assertFalse(r["ok"])
+            self.assertIn("service.bat", r["service"])
+
+    def test_open_original_service_success(self):
+        import tempfile
+
+        from zapret_core.misc import open_original_service
+        with tempfile.TemporaryDirectory() as td:
+            bat = os.path.join(td, "service.bat")
+            with open(bat, "w", encoding="utf-8") as f:
+                f.write("@echo off\n")
+            with mock.patch("zapret_core.misc.ORIG_DIR", td), \
+                 mock.patch("subprocess.Popen") as popen_mock:
+                r = open_original_service()
+                self.assertTrue(r["ok"])
+                popen_mock.assert_called_once()
+
+    def test_set_zapret_dir_validation(self):
+        import tempfile
+
+        from zapret_core import paths
+        self.assertFalse(paths.set_zapret_dir(""))
+        self.assertFalse(paths.set_zapret_dir("C:\\definitely_nonexistent_xyz_dir"))
+        with tempfile.TemporaryDirectory() as td:
+            with mock.patch.object(paths, "SETTINGS_FILE", os.path.join(td, "ui_settings.json")), \
+                 mock.patch.object(paths, "SETTINGS_DIR", td):
+                self.assertTrue(paths.set_zapret_dir(td))
+                self.assertEqual(paths._saved_zapret_dir(), td)
+
+
 if __name__ == "__main__":
     unittest.main(verbosity=2)

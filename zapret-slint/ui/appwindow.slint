@@ -1,0 +1,494 @@
+import { Button, ComboBox, ScrollView } from "std-widgets.slint";
+
+component Card inherits Rectangle {
+    background: #161b26;
+    border-radius: 8px;
+    border-width: 1px;
+    border-color: #242c3d;
+}
+
+component SectionHeader inherits Text {
+    font-size: 11px;
+    font-weight: 800;
+    color: #8b9bb4;
+    letter-spacing: 0.5px;
+}
+
+component StatusBadge inherits Rectangle {
+    in property <string> text: "";
+    in property <color> badge_color: #3b82f6;
+
+    background: badge_color.transparentize(0.85);
+    border-radius: 5px;
+    border-width: 1px;
+    border-color: badge_color.transparentize(0.5);
+    height: 22px;
+
+    HorizontalLayout {
+        padding-left: 8px;
+        padding-right: 8px;
+        Text {
+            text: root.text;
+            font-size: 11px;
+            font-weight: 700;
+            color: root.badge_color;
+            vertical-alignment: center;
+        }
+    }
+}
+
+export component MainWindow inherits Window {
+    title: "ZAPRET SIMPLE (Native Slint)";
+    icon: @image-url("../assets/app.png");
+    min-width: 960px;
+    min-height: 720px;
+    preferred-width: 980px;
+    preferred-height: 760px;
+    background: #0f1219;
+    default-font-family: "Segoe UI";
+
+    in property <string> zapret_version: "v1.10.4";
+    in property <string> service_status: "Остановлена";
+    in property <color> status_color: #f59e0b;
+    in property <string> admin_status: "Администратор";
+    in property <color> admin_color: #22c55e;
+    in property <[string]> strategies: [];
+    in-out property <int> selected_strategy_index: 0;
+
+    in property <string> game_filter_text: "Отключен";
+    in property <string> ipset_text: "Загружен";
+    in property <bool> ipset_active: true;
+    in property <string> check_updates_text: "Включена";
+
+    in property <string> doh_provider_text: "Отключен (DHCP)";
+    in property <bool> doh_active: false;
+    in property <bool> sound_enabled: true;
+    in property <string> autostart_text: "Отключена";
+    in property <bool> autostart_active: false;
+
+    in property <string> log_output: "";
+    in property <bool> is_running: false;
+
+    callback toggle_service();
+    callback remove_service();
+    callback service_status_details();
+    callback apply_strategy();
+
+    callback toggle_game_filter();
+    callback toggle_ipset();
+    callback toggle_check_updates();
+    callback inspect_fakes();
+    callback toggle_doh();
+    callback toggle_sound();
+    callback toggle_autostart();
+    callback select_zapret_folder();
+    callback unpack_zapret_zip();
+
+    callback update_ipset();
+    callback check_hosts();
+    callback check_updates();
+
+    callback run_diagnostics();
+    callback run_tests();
+    callback clear_discord();
+    callback remove_conflicts();
+    callback open_original_service();
+    callback clear_log();
+
+    VerticalLayout {
+        padding: 14px;
+        spacing: 12px;
+
+        // ===== 1. ШАПКА =====
+        Rectangle {
+            height: 58px;
+            background: #161b26;
+            border-radius: 8px;
+            border-width: 1px;
+            border-color: #242c3d;
+
+            HorizontalLayout {
+                padding-left: 18px;
+                padding-right: 18px;
+                alignment: space-between;
+
+                HorizontalLayout {
+                    spacing: 12px;
+                    alignment: start;
+                    Text {
+                        text: "ZAPRET SIMPLE";
+                        font-size: 17px;
+                        font-weight: 800;
+                        color: #ffffff;
+                        vertical-alignment: center;
+                    }
+                    StatusBadge {
+                        text: root.zapret_version;
+                        badge_color: #60a5fa;
+                        y: (parent.height - self.height) / 2;
+                    }
+                    StatusBadge {
+                        text: root.admin_status;
+                        badge_color: root.admin_color;
+                        y: (parent.height - self.height) / 2;
+                    }
+                }
+
+                HorizontalLayout {
+                    spacing: 10px;
+                    alignment: end;
+                    Button {
+                        text: root.sound_enabled ? "🔊 Звук: Вкл" : "🔇 Звук: Выкл";
+                        clicked => { root.toggle_sound(); }
+                    }
+                    Rectangle {
+                        width: 10px;
+                        height: 10px;
+                        border-radius: 5px;
+                        background: root.status_color;
+                        y: (parent.height - self.height) / 2;
+                    }
+                    Text {
+                        text: root.service_status;
+                        font-size: 13px;
+                        font-weight: 700;
+                        color: root.status_color;
+                        vertical-alignment: center;
+                    }
+                }
+            }
+        }
+
+        // ===== 2. СЕТКА СЕКЦИЙ (SERVICE, SETTINGS, UPDATES, TOOLS) =====
+        HorizontalLayout {
+            spacing: 12px;
+
+            // --- Левая колонка: SERVICE + SETTINGS ---
+            VerticalLayout {
+                spacing: 12px;
+                horizontal-stretch: 1;
+
+                // Секция SERVICE
+                Card {
+                    VerticalLayout {
+                        padding: 12px;
+                        spacing: 10px;
+
+                        SectionHeader {
+                            text: ":: SERVICE (УПРАВЛЕНИЕ СЛУЖБОЙ)";
+                        }
+
+                        // Выбор стратегии
+                        HorizontalLayout {
+                            spacing: 8px;
+                            alignment: space-between;
+                            Text {
+                                text: "Стратегия:";
+                                font-size: 12px;
+                                font-weight: 600;
+                                color: #c0c7d6;
+                                vertical-alignment: center;
+                            }
+                            ComboBox {
+                                model: root.strategies;
+                                current-index <=> root.selected_strategy_index;
+                                width: 220px;
+                            }
+                            Button {
+                                text: "Применить";
+                                clicked => { root.apply_strategy(); }
+                            }
+                        }
+
+                        // Кнопки управления службой
+                        HorizontalLayout {
+                            spacing: 8px;
+                            Button {
+                                text: root.is_running ? "⏹ Остановить" : "▶ Запустить";
+                                primary: !root.is_running;
+                                clicked => { root.toggle_service(); }
+                            }
+                            Button {
+                                text: "Статус службы";
+                                clicked => { root.service_status_details(); }
+                            }
+                            Button {
+                                text: "Удалить службу";
+                                clicked => { root.remove_service(); }
+                            }
+                        }
+                    }
+                }
+
+                // Секция SETTINGS
+                Card {
+                    VerticalLayout {
+                        padding: 12px;
+                        spacing: 10px;
+
+                        SectionHeader {
+                            text: ":: SETTINGS (НАСТРОЙКИ И ФИЛЬТРЫ)";
+                        }
+
+                        // Game Filter
+                        HorizontalLayout {
+                            alignment: space-between;
+                            Text {
+                                text: "Игровой фильтр (GameFilter):";
+                                font-size: 12px;
+                                color: #c0c7d6;
+                                vertical-alignment: center;
+                            }
+                            HorizontalLayout {
+                                spacing: 8px;
+                                StatusBadge {
+                                    text: root.game_filter_text;
+                                    badge_color: root.game_filter_text == "Отключен" ? #94a3b8 : #22c55e;
+                                    y: (parent.height - self.height) / 2;
+                                }
+                                Button {
+                                    text: "Сменить";
+                                    clicked => { root.toggle_game_filter(); }
+                                }
+                            }
+                        }
+
+                        // IPSet
+                        HorizontalLayout {
+                            alignment: space-between;
+                            Text {
+                                text: "Фильтр IPSet (ipset-all.txt):";
+                                font-size: 12px;
+                                color: #c0c7d6;
+                                vertical-alignment: center;
+                            }
+                            HorizontalLayout {
+                                spacing: 8px;
+                                StatusBadge {
+                                    text: root.ipset_text;
+                                    badge_color: root.ipset_active ? #22c55e : #ef4444;
+                                    y: (parent.height - self.height) / 2;
+                                }
+                                Button {
+                                    text: "Вкл / Выкл";
+                                    clicked => { root.toggle_ipset(); }
+                                }
+                            }
+                        }
+
+                        // Check Updates flag
+                        HorizontalLayout {
+                            alignment: space-between;
+                            Text {
+                                text: "Автопроверка обновлений:";
+                                font-size: 12px;
+                                color: #c0c7d6;
+                                vertical-alignment: center;
+                            }
+                            HorizontalLayout {
+                                spacing: 8px;
+                                StatusBadge {
+                                    text: root.check_updates_text;
+                                    badge_color: root.check_updates_text == "Включена" ? #22c55e : #94a3b8;
+                                    y: (parent.height - self.height) / 2;
+                                }
+                                Button {
+                                    text: "Переключить";
+                                    clicked => { root.toggle_check_updates(); }
+                                }
+                            }
+                        }
+
+                        // DNS over HTTPS (DoH)
+                        HorizontalLayout {
+                            alignment: space-between;
+                            Text {
+                                text: "DNS over HTTPS (DoH):";
+                                font-size: 12px;
+                                color: #c0c7d6;
+                                vertical-alignment: center;
+                            }
+                            HorizontalLayout {
+                                spacing: 8px;
+                                StatusBadge {
+                                    text: root.doh_provider_text;
+                                    badge_color: root.doh_active ? #22c55e : #94a3b8;
+                                    y: (parent.height - self.height) / 2;
+                                }
+                                Button {
+                                    text: "Сменить DoH";
+                                    clicked => { root.toggle_doh(); }
+                                }
+                            }
+                        }
+
+                        // Autostart with Windows
+                        HorizontalLayout {
+                            alignment: space-between;
+                            Text {
+                                text: "Автозагрузка с Windows:";
+                                font-size: 12px;
+                                color: #c0c7d6;
+                                vertical-alignment: center;
+                            }
+                            HorizontalLayout {
+                                spacing: 8px;
+                                StatusBadge {
+                                    text: root.autostart_text;
+                                    badge_color: root.autostart_active ? #22c55e : #94a3b8;
+                                    y: (parent.height - self.height) / 2;
+                                }
+                                Button {
+                                    text: "Переключить";
+                                    clicked => { root.toggle_autostart(); }
+                                }
+                            }
+                        }
+
+                        // Fakes
+                        HorizontalLayout {
+                            alignment: space-between;
+                            Text {
+                                text: "Fake payloads (*.bin):";
+                                font-size: 12px;
+                                color: #c0c7d6;
+                                vertical-alignment: center;
+                            }
+                            Button {
+                                text: "Список фейков в bin/";
+                                clicked => { root.inspect_fakes(); }
+                            }
+                        }
+                    }
+                }
+            }
+
+            // --- Правая колонка: UPDATES + TOOLS ---
+            VerticalLayout {
+                spacing: 12px;
+                horizontal-stretch: 1;
+
+                // Секция UPDATES
+                Card {
+                    VerticalLayout {
+                        padding: 12px;
+                        spacing: 10px;
+
+                        SectionHeader {
+                            text: ":: UPDATES (ОБНОВЛЕНИЯ)";
+                        }
+
+                        HorizontalLayout {
+                            spacing: 8px;
+                            Button {
+                                text: "🌐 Обновить IPSet";
+                                clicked => { root.update_ipset(); }
+                            }
+                            Button {
+                                text: "📄 Проверить Hosts";
+                                clicked => { root.check_hosts(); }
+                            }
+                            Button {
+                                text: "🚀 Проверить обновления";
+                                clicked => { root.check_updates(); }
+                            }
+                        }
+                    }
+                }
+
+                // Секция TOOLS
+                Card {
+                    VerticalLayout {
+                        padding: 12px;
+                        spacing: 10px;
+
+                        SectionHeader {
+                            text: ":: TOOLS (ИНСТРУМЕНТЫ И ДИАГНОСТИКА)";
+                        }
+
+                        HorizontalLayout {
+                            spacing: 8px;
+                            Button {
+                                text: "🔍 Полная диагностика (18 проверок)";
+                                primary: true;
+                                clicked => { root.run_diagnostics(); }
+                            }
+                            Button {
+                                text: "⚡ Тесты zapret.ps1";
+                                clicked => { root.run_tests(); }
+                            }
+                        }
+
+                        HorizontalLayout {
+                            spacing: 8px;
+                            Button {
+                                text: "🧹 Очистить кэш Discord";
+                                clicked => { root.clear_discord(); }
+                            }
+                            Button {
+                                text: "🛡 Устранить конфликты";
+                                clicked => { root.remove_conflicts(); }
+                            }
+                        }
+
+                        HorizontalLayout {
+                            spacing: 8px;
+                            Button {
+                                text: "⚙ Открыть оригинальный service.bat";
+                                clicked => { root.open_original_service(); }
+                            }
+                        }
+
+                        HorizontalLayout {
+                            spacing: 8px;
+                            Button {
+                                text: "📁 Выбрать папку zapret";
+                                clicked => { root.select_zapret_folder(); }
+                            }
+                            Button {
+                                text: "📦 Распаковать zapret.zip";
+                                clicked => { root.unpack_zapret_zip(); }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        // ===== 3. ВЫВОД И ЖУРНАЛ (LOG) =====
+        Card {
+            vertical-stretch: 1;
+            background: #0d1017;
+
+            VerticalLayout {
+                padding: 10px;
+                spacing: 6px;
+
+                HorizontalLayout {
+                    alignment: space-between;
+                    Text {
+                        text: "ЖУРНАЛ СООБЩЕНИЙ И ВЫВОД ДИАГНОСТИКИ";
+                        font-size: 11px;
+                        font-weight: 800;
+                        color: #64748b;
+                        vertical-alignment: center;
+                    }
+                    Button {
+                        text: "Очистить журнал";
+                        clicked => { root.clear_log(); }
+                    }
+                }
+
+                ScrollView {
+                    Text {
+                        text: root.log_output;
+                        font-family: "Consolas";
+                        font-size: 12px;
+                        color: #e2e8f0;
+                        wrap: word-wrap;
+                    }
+                }
+            }
+        }
+    }
+}

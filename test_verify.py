@@ -55,12 +55,18 @@ for f in ["zapret_pyside.py", "service_manager.py", "i18n.py"] + [
         check(False, f"{f} ошибка: {e}")
 
 print("\n=== Действия меню вызываются в UI ===")
-src = open(os.path.join(SIMPLE, "zapret_pyside.py"), encoding="utf-8").read()
-for a in ["service_status", "service_install", "service_remove", "toggle_ipset",
-          "toggle_check_updates", "check_updates", "set_game_filter", "menu_status",
+with open(os.path.join(SIMPLE, "zapret_pyside.py"), encoding="utf-8") as fh:
+    src = fh.read()
+for a in ["service_install", "service_remove", "start", "stop", "toggle_ipset",
+          "toggle_check_updates", "set_game_filter", "menu_status",
           "clear_discord", "restore_payloads", "ipset_update", "update_hosts",
-          "remove_conflicts", "relaunch_admin", "tests_prereq"]:
+          "remove_conflicts", "relaunch_admin", "tests_prereq",
+          "list_fakes", "replace_active_fakes", "open_original_service"]:
     check(f'"{a}"' in src, f"действие {a}")
+
+check("StatusDialog" in src, "диалог статуса службы (StatusDialog)")
+check("UpdatesDialog" in src, "диалог обновлений (UpdatesDialog)")
+check("service_manager.check_updates" in src, "проверка обновлений (check_updates)")
 
 print("\n=== Фоновая работа без блокировки UI ===")
 check("QThreadPool" in src, "QThreadPool для фоновых операций")
@@ -68,14 +74,16 @@ check("Signal(" in src, "результаты через сигналы Qt")
 check("root.after(0" not in src, "нет остатков tkinter-подхода")
 
 print("\n=== Локализация i18n ===")
-i18n_src = open(os.path.join(SIMPLE, "i18n.py"), encoding="utf-8").read()
+with open(os.path.join(SIMPLE, "i18n.py"), encoding="utf-8") as fh:
+    i18n_src = fh.read()
 check("STRINGS" in i18n_src, "словарь STRINGS объявлен")
 check('from i18n import t' in src, "UI подключён к словарю")
 check("i18n.save" in src, "переключатель языка сохраняет выбор")
 
 print("\n=== Безопасность ===")
 check(os.path.isfile(os.path.join(SIMPLE, "requirements.txt")), "requirements.txt есть")
-req = open(os.path.join(SIMPLE, "requirements.txt"), encoding="utf-8").read()
+with open(os.path.join(SIMPLE, "requirements.txt"), encoding="utf-8") as fh:
+    req = fh.read()
 check("PySide6-Essentials" in req, "PySide6-Essentials в зависимостях")
 check("flask" not in req.lower().replace("#", ""), "flask удалён (веб-вариант не нужен)")
 

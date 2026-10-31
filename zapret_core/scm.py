@@ -37,7 +37,7 @@ def install_service(exe_path: str | None = None, exe_args: str | None = None) ->
         # sc требует пробел после "binPath=" — значение отдельным токеном с пробелом
         res = subprocess.run(["sc", "create", SERVICE_NAME, "binPath= " + binpath,
                               "start=", "auto"],
-                             capture_output=True, creationflags=0x08000000)
+                             capture_output=True, creationflags=0x08000000, timeout=15)
         out = decode_output(res.stdout or res.stderr or b"SCM create OK").strip()
         return res.returncode == 0, out
     except Exception as e:
@@ -117,7 +117,7 @@ def is_running() -> bool:
 def set_autostart(enable: bool = True) -> tuple[bool, str]:
     try:
         cmd = ["sc", "config", SERVICE_NAME, "start=", "auto" if enable else "demand"]
-        res = subprocess.run(cmd, capture_output=True, creationflags=0x08000000)
+        res = subprocess.run(cmd, capture_output=True, creationflags=0x08000000, timeout=15)
         out = decode_output(res.stdout) + decode_output(res.stderr)
         return res.returncode == 0, out
     except Exception as e:

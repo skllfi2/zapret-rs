@@ -1,10 +1,20 @@
 # router.py — основной маршрутизатор действий UI (замена service.bat полностью)
 from i18n import t
 
+from .autostart import is_autostart_enabled, toggle_autostart
 from .diagnostics import remove_conflicts, run_diagnostics
+from .doh import disable_doh, get_doh_status, set_doh
 from .lists import ipset_update, load_user_lists, toggle_ipset, update_hosts
 from .menu import menu_status
-from .misc import admin_use, clear_discord, relaunch_as_admin
+from .misc import (
+    admin_use,
+    check_connectivity,
+    cleanup_orphans,
+    clear_discord,
+    open_original_service,
+    relaunch_as_admin,
+)
+from .paths import set_custom_zapret_dir, unpack_zapret_archive
 from .scm import install_service, query_status, start_service, stop_service, uninstall_service  # noqa: F401 (точка патчинга тестов)
 from .selfupdate import check_app_update, update_app
 from .settings import game_filter_status, set_game_filter, toggle_check_updates
@@ -95,6 +105,28 @@ def run_service_action(action: str = "status_zapret", arg: str = "", **kwargs) -
         ok = relaunch_as_admin()
         return {"ok": ok, "service": t("sm.relaunch_ok") if ok
                 else t("sm.relaunch_fail")}
+    if action == "open_original_service":
+        return open_original_service()
     if action == "best_strategy":
         return best_strategy()
+    if action == "get_doh_status":
+        return get_doh_status()
+    if action == "set_doh":
+        return set_doh(kwargs.get("provider") or arg)
+    if action == "disable_doh":
+        return disable_doh()
+    if action == "unpack_zip":
+        ok, msg = unpack_zapret_archive(kwargs.get("zip_path") or arg, kwargs.get("target_dir"))
+        return {"ok": ok, "service": msg}
+    if action == "set_custom_zapret_dir":
+        ok, msg = set_custom_zapret_dir(kwargs.get("dir_path") or arg)
+        return {"ok": ok, "service": msg}
+    if action == "toggle_autostart":
+        return {"ok": True, "enabled": toggle_autostart()}
+    if action == "is_autostart_enabled":
+        return {"ok": True, "enabled": is_autostart_enabled()}
+    if action == "cleanup_orphans":
+        return cleanup_orphans()
+    if action == "check_connectivity":
+        return check_connectivity()
     return {"ok": False, "service": f"Unknown action: {action}"}

@@ -8,6 +8,8 @@ PyInstaller.__main__.run([
     "--onefile",
     "--windowed",
     "--name", "zapret-simple",
+    "--icon", "assets/app.ico",
+    "--add-data", "assets;assets",
     # pywin32: SCM-модули, часть которых PyInstaller не видит статическим анализом
     "--hidden-import", "win32serviceutil",
     "--hidden-import", "win32service",

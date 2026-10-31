@@ -3,6 +3,7 @@ import os
 import sys
 import time
 import unittest
+from unittest import mock
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 # Qt не должен требовать реального дисплея — рисуем в offscreen
@@ -984,6 +985,101 @@ class TestPySideTray(unittest.TestCase):
         from PySide6.QtGui import QColor
         icon = self.win._status_icon(QColor("#5ee87f"))
         self.assertFalse(icon.isNull())
+
+
+class TestPySideNewUIFeatures(unittest.TestCase):
+    """Тесты новых UI компонентов: DoH диалог, переключатель звука, автозагрузка и выбор папки."""
+
+    @classmethod
+    def setUpClass(cls):
+        from PySide6.QtWidgets import QApplication
+
+        import i18n
+        import zapret_pyside as z
+        cls.z, cls.i18n = z, i18n
+        cls.app = QApplication.instance() or QApplication([])
+        cls.win = z.MainWindow()
+
+    @classmethod
+    def tearDownClass(cls):
+        cls.win._exiting = True
+        cls.win.close()
+
+    def test_doh_dialog_lifecycle(self):
+        with mock.patch.object(self.win, "submit") as submit_m, \
+             mock.patch.object(self.z.QMessageBox, "information"), \
+             mock.patch.object(self.z.QMessageBox, "warning"), \
+             mock.patch("service_manager.play_sound"):
+            dlg = self.z.DohDialog(self.win)
+            self.assertEqual(submit_m.call_count, 1)  # _refresh в __init__
+            dlg._on_status({
+                "provider": "cloudflare",
+                "provider_name": "Cloudflare",
+                "servers": ["1.1.1.1"],
+                "adapters": ["Ethernet"],
+                "autodoh": True,
+            })
+            self.assertIn("Cloudflare", dlg.status_lbl.text())
+            self.assertEqual(dlg.provider_combo.currentData(), "cloudflare")
+
+            # Проверяем отправку команд в воркер
+            dlg._apply_doh()
+            self.assertEqual(submit_m.call_count, 2)
+            dlg._disable_doh()
+            self.assertEqual(submit_m.call_count, 3)
+
+            # Проверяем обработчик завершения действия (ok и error)
+            dlg._on_action_done({"ok": True, "message": "done"})
+            dlg._on_action_done({"ok": False, "error": "failed"})
+
+            dlg.deleteLater()
+
+    def test_sound_toggle_button(self):
+        with mock.patch("service_manager.toggle_sound", side_effect=[False, True]), \
+             mock.patch("service_manager.play_sound"):
+            self.win._toggle_sound()
+            self.assertEqual(self.win.sound_btn.text(), "🔇")
+            self.win._toggle_sound()
+            self.assertEqual(self.win.sound_btn.text(), "🔊")
+
+    def test_autostart_toggle_ui(self):
+        with mock.patch("service_manager.toggle_autostart", side_effect=[True, False]), \
+             mock.patch("service_manager.play_sound"):
+            self.win._toggle_autostart()
+            self.assertIn(self.i18n.t("ui.autostart_on"), self.win.lbl_autostart.text())
+            self.win._toggle_autostart()
+            self.assertIn(self.i18n.t("ui.autostart_off"), self.win.lbl_autostart.text())
+
+    def test_choose_zapret_folder_flow(self):
+        with mock.patch("PySide6.QtWidgets.QFileDialog.getExistingDirectory", return_value="/custom/zapret"), \
+             mock.patch("service_manager.set_custom_zapret_dir", return_value=(True, "OK")):
+            self.win._choose_zapret_folder()
+            self.assertIn("OK", self.win.flash.text())
+
+    def test_unpack_zapret_zip_flow(self):
+        with mock.patch("PySide6.QtWidgets.QFileDialog.getOpenFileName", return_value=("/custom/zapret.zip", "zip")):
+            self.win._unpack_zapret_zip()
+
+        self.win._unpack_done({"ok": True, "service": "Распакован"})
+        self.assertIn("Распакован", self.win.flash.text())
+
+    def test_quick_check_flow(self):
+        with mock.patch.object(self.win, "submit") as submit_m:
+            self.win._quick_check()
+            submit_m.assert_called_once()
+
+        self.win._quick_check_done({
+            "ok": True,
+            "targets": [{"name": "YouTube", "ok": True, "latency_ms": 42}],
+        })
+        self.assertIn("YouTube: OK (42 ms)", self.win.flash.text())
+        self.assertIn("YouTube: OK (42 ms)", self.win.output.toPlainText())
+
+        self.win._quick_check_done({
+            "ok": False,
+            "targets": [{"name": "YouTube", "ok": False, "latency_ms": None}],
+        })
+        self.assertIn("YouTube: FAIL", self.win.flash.text())
 
 
 if __name__ == "__main__":

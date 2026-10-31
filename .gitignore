@@ -5,12 +5,28 @@ __pycache__/
 venv/
 .pytest_cache/
 .strategy
-# артефакты PyInstaller (собрать заново: python build_exe.py)
+
+# Local runtime settings and logs
+ui_settings.json
+*.log
+test_result.txt
+
+# PyInstaller build artifacts
 dist/
 build/
 *.spec
-# артефакты проверок: coverage и mypy
+
+# Test, lint and typing caches
 .coverage
 .coverage.*
 htmlcov/
 .mypy_cache/
+.ruff_cache/
+
+# Rust build artifacts
+target/
+zapret-slint/target/
+**/*.rs.bk
+
+# Local unpacked zapret
+zapret/
