@@ -1,5 +1,13 @@
 # zapret-simple
 
+[![CI](https://github.com/skllfi2/zapret-simple/actions/workflows/ci.yml/badge.svg)](https://github.com/skllfi2/zapret-simple/actions)
+[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
+[![Tests](https://img.shields.io/badge/Tests-272%20passed-brightgreen.svg)]()
+[![Coverage](https://img.shields.io/badge/Coverage-91%25-brightgreen.svg)]()
+[![Platform](https://img.shields.io/badge/Platform-Windows%2010%20%7C%2011-blue.svg)]()
+[![Python](https://img.shields.io/badge/Python-3.12%20%7C%203.15-blue.svg)]()
+[![Rust](https://img.shields.io/badge/Rust-2021%20Edition-orange.svg)]()
+
 Десктопный интерфейс для управления [zapret](https://github.com/Flowseal/zapret-discord-youtube)
 (DPI-bypass через `winws.exe`) — **без** интерактивного `service.bat`.
 
