@@ -10,6 +10,8 @@ jobs:
   test:
     name: Lint, Typecheck and Test
     runs-on: windows-latest
+    env:
+      PYTHONUTF8: "1"
     strategy:
       matrix:
         python-version: [ "3.12" ]
@@ -45,6 +47,8 @@ jobs:
     name: Build Executable Artifact
     needs: test
     runs-on: windows-latest
+    env:
+      PYTHONUTF8: "1"
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
