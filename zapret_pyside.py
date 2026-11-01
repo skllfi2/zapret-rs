@@ -37,6 +37,7 @@ try:
         QPushButton,
         QScrollArea,
         QSpinBox,
+        QStackedWidget,
         QSystemTrayIcon,
         QTextEdit,
         QVBoxLayout,
@@ -53,21 +54,27 @@ def _q_alive(obj: QObject) -> bool:
     return shiboken6.isValid(obj)
 
 COLORS = {
-    "bg_main": "#101218",
-    "bg_card": "#171a22",
-    "bg_header": "#14171f",
-    "text_primary": "#e8eaf0",
-    "text_secondary": "#9aa1b2",
-    "text_muted": "#6a7080",
-    "accent": "#8aa4ff",
-    "danger": "#e86060",
-    "warn": "#e8c860",
-    "success": "#5ee87f",
-    "border": "#242936",
-    "border_hover": "#333a4d",
-    "button_bg": "#1b202a",
-    "button_bg_hover": "#232a37",
-    "log_bg": "#0b0d12",
+    "bg_main": "#18181b",         # Windows 11 Fluent dark canvas
+    "bg_sidebar": "#131315",      # Dark navigation surface (FileSorter style)
+    "bg_card": "#1f1f23",         # Elevated card surface
+    "bg_card_hover": "#242429",   # Card hover
+    "bg_topbar": "#161619",       # Sub-header bar
+    "text_primary": "#f4f4f5",    # High contrast white
+    "text_secondary": "#a1a1aa",  # Muted secondary text
+    "text_muted": "#71717a",      # Tertiary muted
+    "accent": "#0078d4",          # Windows 11 Blue
+    "accent_hover": "#1084e3",    # Light accent
+    "accent_subtle": "#60cdff",   # Soft accent cyan
+    "danger": "#ef4444",          # Red danger
+    "danger_hover": "#f87171",    # Soft danger
+    "warn": "#f59e0b",            # Amber warning
+    "success": "#5ee87f",         # Green success
+    "border": "#27272a",          # Subtle border
+    "border_card": "#2e2e33",     # Card border
+    "border_hover": "#3f3f46",    # Hover border
+    "button_bg": "#27272c",       # Button background
+    "button_bg_hover": "#323238", # Button hover
+    "log_bg": "#0d0d0f",          # Pure terminal dark
 }
 
 # Цвета как PrintGreen/PrintYellow/PrintRed в оригинале
@@ -76,78 +83,92 @@ LEVEL_COLORS = {"ok": COLORS["success"], "warn": COLORS["warn"], "bad": COLORS["
 
 STYLESHEET = f"""
 QWidget {{ background-color: {COLORS['bg_main']}; color: {COLORS['text_primary']};
-    font-family: 'Segoe UI Variable', 'Segoe UI'; font-size: 9pt; }}
+    font-family: 'Segoe UI Variable Text', 'Segoe UI Variable', 'Segoe UI', sans-serif; font-size: 9pt; }}
 
-QFrame#header {{ background-color: {COLORS['bg_header']};
-    border-bottom: 1px solid {COLORS['border']}; }}
-QFrame#card {{ background-color: {COLORS['bg_card']}; border: 1px solid {COLORS['border']};
-    border-radius: 12px; }}
+QFrame#sidebar {{ background-color: {COLORS['bg_sidebar']}; border-right: 1px solid {COLORS['border']}; }}
+QFrame#statusCard {{ background-color: rgba(255, 255, 255, 0.04); border: 1px solid rgba(255, 255, 255, 0.08); border-radius: 8px; }}
+QFrame#topBar {{ background-color: {COLORS['bg_topbar']}; border: 1px solid {COLORS['border']}; border-radius: 8px; }}
+QFrame#header {{ background-color: {COLORS['bg_topbar']}; border-bottom: 1px solid {COLORS['border']}; }}
+QFrame#card {{ background-color: {COLORS['bg_card']}; border: 1px solid {COLORS['border_card']}; border-radius: 8px; }}
+QFrame#card:hover {{ background-color: {COLORS['bg_card_hover']}; border-color: {COLORS['border_hover']}; }}
 
-QLabel#appTitle {{ font-size: 17px; font-weight: bold; }}
+QLabel#appTitle {{ font-size: 13pt; font-weight: bold; color: #f4f4f5; letter-spacing: 0.5px; }}
+QLabel#appLogo {{ font-size: 16pt; color: {COLORS['accent_subtle']}; }}
 QLabel#version {{ color: {COLORS['text_secondary']}; font-size: 8pt; }}
-QLabel#section {{ color: {COLORS['text_secondary']}; font-size: 8pt; font-weight: bold;
-    padding: 8px 0 4px 0; border-bottom: 1px solid {COLORS['border']}; }}
-QLabel#footer {{ color: {COLORS['text_muted']}; font-size: 7pt; }}
-QLabel#warn {{ color: {COLORS['danger']}; font-weight: bold; }}
-QLabel#status {{ color: {COLORS['text_secondary']}; font-size: 9pt; font-weight: bold; }}
+QLabel#section {{ color: {COLORS['accent_subtle']}; font-size: 8.5pt; font-weight: bold;
+    text-transform: uppercase; letter-spacing: 0.5px; padding: 4px 0 2px 0; border-bottom: 1px solid {COLORS['border']}; }}
+QLabel#footer {{ color: {COLORS['text_muted']}; font-size: 7.5pt; }}
+QLabel#warn {{ color: {COLORS['danger_hover']}; font-weight: bold; font-size: 8.5pt; }}
+QLabel#status {{ color: {COLORS['text_primary']}; font-size: 9pt; font-weight: bold; }}
 QLabel#flash {{ color: {COLORS['text_secondary']}; font-size: 8pt; }}
+QLabel#cardTitle {{ font-size: 9.5pt; font-weight: bold; color: {COLORS['text_primary']}; }}
+QLabel#cardDesc {{ font-size: 8pt; color: {COLORS['text_secondary']}; }}
+QLabel#iconBadge {{ background-color: rgba(0, 120, 212, 0.15); color: {COLORS['accent_subtle']};
+    border: 1px solid rgba(0, 120, 212, 0.3); border-radius: 8px; font-size: 14pt; }}
+QLabel#adminBadge {{ background-color: rgba(255, 255, 255, 0.06); color: {COLORS['text_secondary']};
+    border: 1px solid rgba(255, 255, 255, 0.1); border-radius: 4px; padding: 2px 6px; font-size: 7.5pt; font-weight: bold; }}
 
 QPushButton {{ background-color: {COLORS['button_bg']}; color: {COLORS['text_primary']};
-    border: 1px solid {COLORS['border']}; border-radius: 8px; padding: 8px 12px;
-    font-weight: bold; font-size: 9pt; text-align: left; }}
-QPushButton:hover {{ background-color: {COLORS['button_bg_hover']};
-    border-color: {COLORS['accent']}; }}
-QPushButton:pressed {{ background-color: #14171f; }}
+    border: 1px solid {COLORS['border_card']}; border-radius: 6px; padding: 6px 14px;
+    font-weight: 600; font-size: 8.5pt; text-align: left; }}
+QPushButton:hover {{ background-color: {COLORS['button_bg_hover']}; border-color: {COLORS['accent']}; }}
+QPushButton:pressed {{ background-color: #1a1a1d; }}
 QPushButton:focus {{ border-color: {COLORS['accent']}; }}
-QPushButton:disabled {{ color: {COLORS['text_muted']}; background-color: {COLORS['bg_main']};
-    border-color: {COLORS['border']}; }}
-QPushButton#small {{ padding: 4px 12px; font-size: 8pt; text-align: center; }}
-QPushButton#primary {{ background-color: #1a2333; color: #9bb7ff; border: 1px solid #334b73; }}
-QPushButton#primary:hover {{ background-color: #24334d; border-color: {COLORS['accent']}; color: #ffffff; }}
-QPushButton#accent {{ background-color: #15241b; color: #7fe89d; border: 1px solid #224d32; }}
-QPushButton#accent:hover {{ background-color: #1e3828; border-color: {COLORS['success']}; color: #ffffff; }}
-QPushButton#danger {{ background-color: #251618; color: #f28b8b; border: 1px solid #52272c; }}
-QPushButton#danger:hover {{ background-color: #381e22; border-color: {COLORS['danger']}; color: #ffffff; }}
-QLabel#statusBadge {{ background-color: {COLORS['bg_main']}; color: {COLORS['text_secondary']};
-    border: 1px solid {COLORS['border']}; border-radius: 6px; padding: 4px 10px; font-weight: bold; font-size: 8.5pt; }}
+QPushButton:disabled {{ color: {COLORS['text_muted']}; background-color: #17171a; border-color: {COLORS['border']}; }}
 
-QComboBox, QSpinBox {{ background-color: {COLORS['button_bg']}; color: {COLORS['text_primary']};
-    border: 1px solid {COLORS['border']}; border-radius: 8px; padding: 6px 10px; font-size: 9pt; }}
-QComboBox:hover, QSpinBox:hover {{ border-color: {COLORS['border_hover']}; }}
+QPushButton#navBtn {{ background-color: transparent; color: {COLORS['text_secondary']}; border: none;
+    border-radius: 6px; padding: 8px 12px; font-size: 9pt; font-weight: 500; text-align: left; }}
+QPushButton#navBtn:hover {{ background-color: rgba(255, 255, 255, 0.06); color: {COLORS['text_primary']}; }}
+QPushButton#navBtn:checked {{ background-color: {COLORS['accent']}; color: #ffffff; font-weight: bold; }}
+
+QPushButton#small {{ padding: 4px 10px; font-size: 8pt; text-align: center; }}
+QPushButton#primary {{ background-color: {COLORS['accent']}; color: #ffffff; border: 1px solid {COLORS['accent_hover']}; }}
+QPushButton#primary:hover {{ background-color: {COLORS['accent_hover']}; border-color: #3898ec; }}
+QPushButton#accent {{ background-color: #164e2e; color: #4ade80; border: 1px solid #237846; }}
+QPushButton#accent:hover {{ background-color: #1d633b; border-color: #34d399; color: #ffffff; }}
+QPushButton#danger {{ background-color: #3d1a1d; color: {COLORS['danger_hover']}; border: 1px solid #632328; }}
+QPushButton#danger:hover {{ background-color: #502024; border-color: {COLORS['danger']}; color: #ffffff; }}
+
+QLabel#statusBadge {{ background-color: rgba(0, 120, 212, 0.12); color: {COLORS['accent_subtle']};
+    border: 1px solid rgba(0, 120, 212, 0.25); border-radius: 4px; padding: 4px 8px; font-weight: bold; font-size: 8pt; }}
+
+QComboBox, QSpinBox {{ background-color: #222226; color: {COLORS['text_primary']};
+    border: 1px solid #333338; border-radius: 6px; padding: 5px 10px; font-size: 8.5pt; }}
+QComboBox:hover, QSpinBox:hover {{ border-color: #4a4a55; }}
 QComboBox:focus, QSpinBox:focus {{ border-color: {COLORS['accent']}; }}
 QComboBox::drop-down {{ subcontrol-origin: padding; width: 24px; border: none; }}
 QComboBox::down-arrow {{ image: none; width: 8px; height: 8px; }}
 QComboBox QAbstractItemView {{ background-color: {COLORS['bg_card']}; color: {COLORS['text_primary']};
-    selection-background-color: {COLORS['button_bg_hover']}; selection-color: {COLORS['text_primary']};
-    border: 1px solid {COLORS['border']}; border-radius: 8px; padding: 4px; }}
+    selection-background-color: {COLORS['accent']}; selection-color: #ffffff;
+    border: 1px solid #333338; border-radius: 6px; padding: 4px; }}
 
 QTextEdit {{ background-color: {COLORS['log_bg']}; color: #dfe3ec;
-    border: 1px solid {COLORS['border']}; border-radius: 10px; padding: 8px;
-    font-family: 'Cascadia Mono', 'Consolas'; font-size: 9pt;
-    selection-background-color: #31405e; selection-color: {COLORS['text_primary']}; }}
+    border: 1px solid {COLORS['border']}; border-radius: 6px; padding: 8px;
+    font-family: 'Cascadia Mono', 'Consolas', monospace; font-size: 8.5pt;
+    selection-background-color: #264f78; selection-color: {COLORS['text_primary']}; }}
 
-QDialog {{ background-color: {COLORS['bg_card']}; border: 1px solid {COLORS['border']}; }}
+QScrollArea {{ background: transparent; border: none; }}
+QScrollArea > QWidget > QWidget {{ background: transparent; }}
+
+QDialog {{ background-color: {COLORS['bg_card']}; border: 1px solid {COLORS['border_card']}; border-radius: 8px; }}
 
 QMenu {{ background-color: {COLORS['bg_card']}; color: {COLORS['text_primary']};
-    border: 1px solid {COLORS['border']}; border-radius: 8px; padding: 4px; }}
-QMenu::item {{ border-radius: 6px; padding: 6px 20px 6px 12px; margin: 1px 2px; }}
-QMenu::item:selected {{ background-color: {COLORS['button_bg_hover']}; }}
-QMenu::separator {{ height: 1px; background-color: {COLORS['border']};
-    margin: 4px 8px; }}
+    border: 1px solid #333338; border-radius: 6px; padding: 4px; }}
+QMenu::item {{ border-radius: 4px; padding: 6px 20px 6px 10px; margin: 1px 2px; }}
+QMenu::item:selected {{ background-color: {COLORS['accent']}; color: #ffffff; }}
+QMenu::separator {{ height: 1px; background-color: {COLORS['border']}; margin: 4px 6px; }}
 
-QScrollBar:vertical {{ background: transparent; width: 10px; margin: 2px; }}
-QScrollBar::handle:vertical {{ background-color: #2c3342; border-radius: 4px;
-    min-height: 30px; }}
-QScrollBar::handle:vertical:hover {{ background-color: #3a4356; }}
-QScrollBar:horizontal {{ background: transparent; height: 10px; margin: 2px; }}
-QScrollBar::handle:horizontal {{ background-color: #2c3342; border-radius: 4px;
-    min-width: 30px; }}
-QScrollBar::handle:horizontal:hover {{ background-color: #3a4356; }}
+QScrollBar:vertical {{ background: transparent; width: 8px; margin: 2px; }}
+QScrollBar::handle:vertical {{ background-color: #333338; border-radius: 4px; min-height: 24px; }}
+QScrollBar::handle:vertical:hover {{ background-color: #4f4f58; }}
+QScrollBar:horizontal {{ background: transparent; height: 8px; margin: 2px; }}
+QScrollBar::handle:horizontal {{ background-color: #333338; border-radius: 4px; min-width: 24px; }}
+QScrollBar::handle:horizontal:hover {{ background-color: #4f4f58; }}
 QScrollBar::add-line, QScrollBar::sub-line {{ height: 0; width: 0; }}
 QScrollBar::add-page, QScrollBar::sub-page {{ background: transparent; }}
 
-QToolTip {{ background-color: {COLORS['bg_card']}; color: {COLORS['text_primary']};
-    border: 1px solid {COLORS['border']}; padding: 4px 8px; }}
+QToolTip {{ background-color: #222226; color: {COLORS['text_primary']};
+    border: 1px solid #333338; border-radius: 4px; padding: 4px 8px; }}
 """
 
 
@@ -169,7 +190,10 @@ class Worker(QRunnable):
             result = self.fn(*self.args, **self.kwargs)
         except Exception as e:  # noqa: BLE001
             result = {"ok": False, "error": str(e)}
-        self.signals.finished.emit(result)
+        try:
+            self.signals.finished.emit(result)
+        except RuntimeError:
+            pass
 
 
 class ClickableLabel(QLabel):
@@ -619,6 +643,104 @@ def _get_asset_path(*parts: str) -> str:
     return os.path.join(service_manager.APP_DIR, "assets", *parts)
 
 
+class SettingsCard(QFrame):
+    """Карточка настроек в стиле WinUI 3 (по аналогии с SettingsCard в FileSorter).
+    Содержит иконку в бейдже, заголовок, описание и область для элементов управления."""
+    def __init__(
+        self,
+        icon_text: str,
+        title: str,
+        description: str = "",
+        action_widget: QWidget | QHBoxLayout | QVBoxLayout | None = None,
+        parent: QWidget | None = None,
+    ) -> None:
+        super().__init__(parent)
+        self.setObjectName("card")
+        self.setMinimumHeight(64)
+        lay = QVBoxLayout(self)
+        lay.setContentsMargins(14, 10, 14, 10)
+        lay.setSpacing(6)
+
+        top = QHBoxLayout()
+        top.setSpacing(12)
+
+        if icon_text:
+            badge = QLabel(icon_text)
+            badge.setObjectName("iconBadge")
+            badge.setFixedSize(36, 36)
+            badge.setAlignment(Qt.AlignmentFlag.AlignCenter)
+            top.addWidget(badge)
+
+        t_box = QVBoxLayout()
+        t_box.setSpacing(2)
+        t_lbl = QLabel(title)
+        t_lbl.setObjectName("cardTitle")
+        t_box.addWidget(t_lbl)
+        if description:
+            d_lbl = QLabel(description)
+            d_lbl.setObjectName("cardDesc")
+            d_lbl.setWordWrap(True)
+            t_box.addWidget(d_lbl)
+        top.addLayout(t_box, 1)
+
+        if action_widget is not None:
+            if isinstance(action_widget, QWidget):
+                top.addWidget(action_widget)
+            else:
+                top.addLayout(action_widget)
+
+        lay.addLayout(top)
+
+
+class ToastWidget(QWidget):
+    """Всплывающее неблокирующее уведомление в стиле WinUI 3 Toast (как в FileSorter)."""
+    def __init__(self, msg: str, level: str = "info", parent: QWidget | None = None) -> None:
+        super().__init__(parent)
+        self.setWindowFlags(
+            Qt.WindowType.WindowStaysOnTopHint |
+            Qt.WindowType.FramelessWindowHint |
+            Qt.WindowType.Tool
+        )
+        self.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground)
+        self.setFixedSize(350, 54)
+
+        border_color = LEVEL_COLORS.get(level, COLORS["accent"])
+        container = QFrame(self)
+        container.setObjectName("toastContainer")
+        container.setGeometry(0, 0, 350, 54)
+        container.setStyleSheet(f"""
+            QFrame#toastContainer {{
+                background-color: #202024;
+                border: 1px solid {border_color};
+                border-radius: 8px;
+            }}
+        """)
+
+        box = QHBoxLayout(container)
+        box.setContentsMargins(14, 8, 14, 8)
+        box.setSpacing(10)
+
+        icon_str = {"ok": "✅", "bad": "❌", "warn": "⚠️", "info": "ℹ️"}.get(level, "ℹ️")
+        icon_lbl = QLabel(icon_str)
+        icon_lbl.setStyleSheet("font-size: 14px; background: transparent;")
+        box.addWidget(icon_lbl)
+
+        lbl = QLabel(msg)
+        lbl.setStyleSheet("color: #FFFFFF; font-size: 9pt; font-weight: 500; background: transparent;")
+        lbl.setWordWrap(True)
+        box.addWidget(lbl, 1)
+
+    def show_and_fade(self, duration_ms: int = 3500) -> None:
+        if "unittest" in sys.modules or os.environ.get("QT_QPA_PLATFORM") == "offscreen":
+            return
+        scr = QApplication.primaryScreen()
+        if scr:
+            geom = scr.geometry()
+            self.move(geom.right() - self.width() - 24, geom.bottom() - self.height() - 48)
+        self.show()
+        QTimer.singleShot(duration_ms, self.close)
+
+
 class MainWindow(QMainWindow):
     # Сигнал живого вывода тестов: рабочий поток -> главный поток Qt
     line_signal = Signal(str)
@@ -627,12 +749,14 @@ class MainWindow(QMainWindow):
     lbl_ipset: QLabel
     lbl_upd: QLabel
     lbl_doh: QLabel
+    lbl_autostart: QLabel
 
     def __init__(self, auto_refresh: bool | None = None) -> None:
         super().__init__()
         self.setWindowTitle("ZAPRET SERVICE MANAGER")
-        self.resize(1120, 680)
-        self.setMinimumSize(960, 520)
+        self.resize(1180, 720)
+        self.setMinimumSize(980, 580)
+        self._current_tab_index = 0
 
         icon_path = _get_asset_path("app.ico")
         if os.path.isfile(icon_path):
@@ -674,194 +798,452 @@ class MainWindow(QMainWindow):
             self.refresh()
         self.refresh_menu_status()
 
-    # ---------- UI ----------
+    # ---------- UI (FileSorter / WinUI 3 Navigation Layout) ----------
     def _build_ui(self) -> None:
-        self._menu_buttons: list[QPushButton] = []  # реестр кнопок действий (гасятся в submit_action)
+        self._menu_buttons: list[QPushButton] = []
         root = QWidget()
-        lay = QVBoxLayout(root)
-        lay.setContentsMargins(0, 0, 0, 0)
-        lay.setSpacing(0)
+        root_lay = QHBoxLayout(root)
+        root_lay.setContentsMargins(0, 0, 0, 0)
+        root_lay.setSpacing(0)
 
-        # ===== Шапка: как заголовок меню service.bat =====
-        header = QFrame()
-        header.setObjectName("header")
-        header.setFixedHeight(76)
-        h = QHBoxLayout(header)
-        h.setContentsMargins(18, 6, 18, 6)
-        left = QVBoxLayout()
-        trow = QHBoxLayout()
-        title = QLabel("ZAPRET SERVICE MANAGER")
-        title.setObjectName("appTitle")
-        trow.addWidget(title)
+        # =====================================================================
+        # 1. Левый сайдбар навигации (как в FileSorter)
+        # =====================================================================
+        sidebar = QFrame()
+        sidebar.setObjectName("sidebar")
+        sidebar.setFixedWidth(230)
+        s_lay = QVBoxLayout(sidebar)
+        s_lay.setContentsMargins(12, 14, 12, 12)
+        s_lay.setSpacing(8)
+
+        # Заголовок бренда
+        brand_row = QHBoxLayout()
+        logo_lbl = QLabel("⚡")
+        logo_lbl.setObjectName("appLogo")
+        title_lbl = QLabel("ZAPRET SIMPLE")
+        title_lbl.setObjectName("appTitle")
+        brand_row.addWidget(logo_lbl)
+        brand_row.addWidget(title_lbl)
+        brand_row.addStretch()
+        s_lay.addLayout(brand_row)
+
+        # Бейджи версии и прав Администратора
+        badge_row = QHBoxLayout()
         self.version_lbl = QLabel("v?")
         self.version_lbl.setObjectName("version")
-        trow.addWidget(self.version_lbl)
-        trow.addStretch()
-        left.addLayout(trow)
-        # Strategy + выбор (в оригинале строка "Strategy: X" под заголовком)
-        srow = QHBoxLayout()
-        strat_lbl = QLabel(t("ui.strategy"))
-        strat_lbl.setObjectName("version")
-        srow.addWidget(strat_lbl)
-        self.strat_box = QComboBox()
-        self.strat_box.setFixedWidth(230)
-        self.strat_box.currentTextChanged.connect(lambda _: self.apply_strategy())
-        srow.addWidget(self.strat_box)
-        self.apply_btn = QPushButton(t("ui.apply"))
-        self.apply_btn.setObjectName("small")
-        self.apply_btn.setFixedWidth(100)
-        self.apply_btn.setCursor(Qt.CursorShape.PointingHandCursor)
-        self.apply_btn.clicked.connect(self.apply_strategy)
-        srow.addWidget(self.apply_btn)
-        srow.addStretch()
-        # Переключатель языка ru/en — выбор сохраняется и переживает перезапуск
+        badge_row.addWidget(self.version_lbl)
+        badge_row.addStretch()
+        admin_lbl = QLabel("🛡️ Admin" if service_manager.is_admin() else "User")
+        admin_lbl.setObjectName("adminBadge")
+        badge_row.addWidget(admin_lbl)
+        s_lay.addLayout(badge_row)
+        s_lay.addSpacing(4)
+
+        # Глобальная карточка статуса службы (всегда видна в сайдбаре)
+        status_card = QFrame()
+        status_card.setObjectName("statusCard")
+        sc_lay = QVBoxLayout(status_card)
+        sc_lay.setContentsMargins(10, 8, 10, 8)
+        sc_lay.setSpacing(6)
+
+        sc_top = QHBoxLayout()
+        self.dot = QLabel()
+        self.dot.setFixedSize(10, 10)
+        self.dot.setStyleSheet(f"background-color: {COLORS['text_muted']}; border-radius: 5px;")
+        sc_top.addWidget(self.dot)
+        self.status_text = QLabel(t("ui.status_unknown"))
+        self.status_text.setObjectName("status")
+        sc_top.addWidget(self.status_text, 1)
+        sc_lay.addLayout(sc_top)
+
+        self.payload_warn = ClickableLabel("")
+        self.payload_warn.setObjectName("warn")
+        self.payload_warn.setAlignment(Qt.AlignmentFlag.AlignLeft)
+        self.payload_warn.set_on_click(lambda: self.run_action("restore_payloads"))
+        sc_lay.addWidget(self.payload_warn)
+
+        sc_btns = QHBoxLayout()
+        sc_btns.setSpacing(4)
+        btn_q_start = self._menu_btn(t("ui.start_service"), lambda: self.run_action("start"), role="accent")
+        btn_q_start.setFixedHeight(26)
+        btn_q_stop = self._menu_btn(t("ui.stop_service"), lambda: self.run_action("stop"), role="danger")
+        btn_q_stop.setFixedHeight(26)
+        sc_btns.addWidget(btn_q_start)
+        sc_btns.addWidget(btn_q_stop)
+        sc_lay.addLayout(sc_btns)
+        s_lay.addWidget(status_card)
+        s_lay.addSpacing(6)
+
+        # Заголовок навигации
+        nav_hdr = QLabel("НАВИГАЦИЯ" if i18n.LANG == "ru" else "NAVIGATION")
+        nav_hdr.setStyleSheet("color: #71717a; font-size: 7.5pt; font-weight: bold; padding-left: 4px;")
+        s_lay.addWidget(nav_hdr)
+
+        # Кнопки навигации по разделам
+        self.nav_buttons: list[QPushButton] = []
+        nav_tabs = [
+            ("🛡️  " + t("ui.sec_service"), 0),
+            ("⚙️  " + t("ui.sec_settings"), 1),
+            ("🔄  " + t("ui.sec_updates"), 2),
+            ("🛠️  " + t("ui.sec_tools"), 3),
+            ("📋  " + t("ui.output"), 4),
+        ]
+        for name, idx in nav_tabs:
+            btn = QPushButton(name)
+            btn.setCheckable(True)
+            btn.setFixedHeight(38)
+            btn.setObjectName("navBtn")
+            btn.clicked.connect(lambda checked=False, i=idx: self._switch_tab(i))
+            self.nav_buttons.append(btn)
+            s_lay.addWidget(btn)
+
+        s_lay.addStretch(1)
+
+        # Подвал сайдбара: язык, звук, тумблер панели вывода
+        foot_row = QHBoxLayout()
+        foot_row.setSpacing(6)
+
         self.lang_btn = QPushButton(i18n.LANG.upper())
         self.lang_btn.setObjectName("small")
-        self.lang_btn.setFixedSize(46, 26)
+        self.lang_btn.setFixedSize(46, 28)
         self.lang_btn.setToolTip(t("ui.lang"))
         self.lang_btn.clicked.connect(self._switch_lang)
-        srow.addWidget(self.lang_btn)
-        # Тумблер звуков
+        foot_row.addWidget(self.lang_btn)
+
         sound_enabled = service_manager.is_sound_enabled()
         self.sound_btn = QPushButton("🔊" if sound_enabled else "🔇")
         self.sound_btn.setObjectName("small")
-        self.sound_btn.setFixedSize(36, 26)
+        self.sound_btn.setFixedSize(38, 28)
         self.sound_btn.setToolTip(t("ui.sound_on") if sound_enabled else t("ui.sound_off"))
         self.sound_btn.clicked.connect(self._toggle_sound)
-        srow.addWidget(self.sound_btn)
-        left.addLayout(srow)
-        h.addLayout(left, 1)
+        foot_row.addWidget(self.sound_btn)
 
-        # Статус службы + payload справа
-        right = QVBoxLayout()
-        srow2 = QHBoxLayout()
-        srow2.addStretch()
-        self.dot = QLabel()
-        self.dot.setFixedSize(12, 12)
-        self.dot.setStyleSheet(f"background-color: {COLORS['text_muted']}; border-radius: 6px;")
-        srow2.addWidget(self.dot)
-        srow2.addSpacing(6)
-        self.status_text = QLabel(t("ui.status_unknown"))
-        self.status_text.setObjectName("status")
-        srow2.addWidget(self.status_text)
-        right.addLayout(srow2)
-        self.payload_warn = ClickableLabel("")
-        self.payload_warn.setObjectName("warn")
-        self.payload_warn.setAlignment(Qt.AlignmentFlag.AlignRight)
-        self.payload_warn.set_on_click(lambda: self.run_action("restore_payloads"))
-        right.addWidget(self.payload_warn)
-        # Флеш-статус действия + тумблер панели вывода (скрыта по умолчанию)
-        frow = QHBoxLayout()
-        self.flash = QLabel("")
-        self.flash.setObjectName("flash")
-        frow.addWidget(self.flash, 1)
         self.out_toggle = QPushButton(t("ui.out_show"))
         self.out_toggle.setObjectName("small")
-        self.out_toggle.setFixedHeight(26)
+        self.out_toggle.setFixedHeight(28)
         self.out_toggle.setCursor(Qt.CursorShape.PointingHandCursor)
         self.out_toggle.clicked.connect(self._toggle_output)
-        frow.addWidget(self.out_toggle)
-        right.addLayout(frow)
-        h.addLayout(right)
-        lay.addWidget(header)
+        foot_row.addWidget(self.out_toggle, 1)
+        s_lay.addLayout(foot_row)
 
-        # ===== Тело: меню слева, вывод справа — читается одновременно =====
-        body = QHBoxLayout()
-        body.setSpacing(12)
-        lay.addLayout(body, 1)
-        lay.setContentsMargins(14, 12, 14, 12)
+        root_lay.addWidget(sidebar)
 
-        # ===== Меню-секции =====
-        card = QFrame()
-        card.setObjectName("card")
-        c = QVBoxLayout(card)
-        c.setContentsMargins(16, 10, 16, 10)
-        c.setSpacing(6)
-        body.addWidget(card, 3)
+        # =====================================================================
+        # 2. Основная рабочая область (Main Content Area)
+        # =====================================================================
+        main_area = QWidget()
+        m_lay = QVBoxLayout(main_area)
+        m_lay.setContentsMargins(16, 12, 16, 12)
+        m_lay.setSpacing(10)
 
-        # --- :: SERVICE (пункты службы + Start/Stop) ---
-        sec_lbl = QLabel(t("ui.sec_service"))
-        sec_lbl.setObjectName("section")
-        c.addWidget(sec_lbl)
-        g = QGridLayout()
-        g.setSpacing(6)
-        self._menu_btn(g, 0, 0, t("ui.install_service"), lambda: self.run_action("service_install"), role="primary")
-        self._menu_btn(g, 0, 1, t("ui.remove_services"), lambda: self.run_action("service_remove"), role="danger")
-        self._menu_btn(g, 0, 2, t("ui.admin_rights"), self._relaunch_admin, role="accent")
-        self._menu_btn(g, 1, 0, t("ui.check_status"), self._open_status)
-        self._menu_btn(g, 1, 1, t("ui.start_service"), lambda: self.run_action("start"), role="accent")
-        self._menu_btn(g, 1, 2, t("ui.stop_service"), lambda: self.run_action("stop"), role="danger")
-        g.setColumnStretch(0, 3)
-        g.setColumnStretch(1, 3)
-        g.setColumnStretch(2, 2)
-        c.addLayout(g)
+        # Верхняя плашка действий (Top Bar: стратегия, флеш, права)
+        top_bar = QFrame()
+        top_bar.setObjectName("topBar")
+        top_bar.setFixedHeight(54)
+        tb_lay = QHBoxLayout(top_bar)
+        tb_lay.setContentsMargins(14, 8, 14, 8)
+        tb_lay.setSpacing(10)
 
-        # --- :: SETTINGS (статусы в бейджах) ---
-        sec_lbl = QLabel(t("ui.sec_settings"))
-        sec_lbl.setObjectName("section")
-        c.addWidget(sec_lbl)
-        g = QGridLayout()
-        g.setSpacing(6)
-        self._menu_btn(g, 0, 0, t("ui.game_filter"), self._game_filter_menu)
-        self._status_cell(g, 0, 1, "lbl_gf")
-        self._menu_btn(g, 1, 0, t("ui.ipset_filter"), lambda: self.run_action("toggle_ipset"))
-        self._status_cell(g, 1, 1, "lbl_ipset")
-        self._menu_btn(g, 2, 0, t("ui.autoupdate_check"), lambda: self.run_action("toggle_check_updates"))
-        self._status_cell(g, 2, 1, "lbl_upd")
-        self._menu_btn(g, 3, 0, t("ui.replace_fakes"), self.show_fakes)
-        self._menu_btn(g, 4, 0, t("ui.doh_sec"), self._open_doh)
-        self._status_cell(g, 4, 1, "lbl_doh")
-        self._menu_btn(g, 5, 0, t("ui.autostart"), self._toggle_autostart)
-        self._status_cell(g, 5, 1, "lbl_autostart")
-        g.setColumnStretch(0, 2)
-        g.setColumnStretch(1, 3)
-        c.addLayout(g)
+        strat_lbl = QLabel(t("ui.strategy"))
+        strat_lbl.setObjectName("version")
+        tb_lay.addWidget(strat_lbl)
 
-        # --- :: UPDATES ---
-        sec_lbl = QLabel(t("ui.sec_updates"))
-        sec_lbl.setObjectName("section")
-        c.addWidget(sec_lbl)
-        g = QGridLayout()
-        g.setSpacing(6)
-        self._menu_btn(g, 0, 0, t("ui.update_ipset"), lambda: self.run_action("ipset_update"))
-        self._menu_btn(g, 0, 1, t("ui.update_hosts"), lambda: self.run_action("update_hosts"))
-        self._menu_btn(g, 1, 0, t("ui.check_updates"), self._open_updates)
-        g.setColumnStretch(0, 1)
-        g.setColumnStretch(1, 1)
-        c.addLayout(g)
+        self.strat_box = QComboBox()
+        self.strat_box.setFixedWidth(230)
+        self.strat_box.currentTextChanged.connect(lambda _: self.apply_strategy())
+        tb_lay.addWidget(self.strat_box)
 
-        # --- :: TOOLS ---
-        sec_lbl = QLabel(t("ui.sec_tools"))
-        sec_lbl.setObjectName("section")
-        c.addWidget(sec_lbl)
-        g = QGridLayout()
-        g.setSpacing(6)
-        self._menu_btn(g, 0, 0, t("ui.run_diagnostics"), self.run_diagnostics)
-        self._menu_btn(g, 0, 1, t("ui.run_tests"), self.run_tests)
-        self._menu_btn(g, 1, 0, t("ui.remove_conflicts"), lambda: self.run_action("remove_conflicts"), role="danger")
-        self._menu_btn(g, 1, 1, t("ui.clear_discord"), lambda: self.run_action("clear_discord"))
-        self._menu_btn(g, 2, 0, t("ui.restore_payload"), lambda: self.run_action("restore_payloads"))
-        self._menu_btn(g, 2, 1, t("ui.apply_best"), self.apply_best_strategy, role="primary")
-        self._menu_btn(g, 3, 0, t("ui.open_original_service"), lambda: self.run_action("open_original_service"))
-        self._menu_btn(g, 3, 1, t("ui.select_folder"), self._choose_zapret_folder)
-        self._menu_btn(g, 4, 0, t("ui.unpack_zip"), self._unpack_zapret_zip)
-        self._menu_btn(g, 4, 1, t("ui.quick_check"), self._quick_check)
-        g.setColumnStretch(0, 1)
-        g.setColumnStretch(1, 1)
-        c.addLayout(g)
-        c.addStretch(1)  # пункты меню прижаты вверх, не слипаются с выводом
+        self.apply_btn = QPushButton(t("ui.apply"))
+        self.apply_btn.setObjectName("primary")
+        self.apply_btn.setFixedWidth(90)
+        self.apply_btn.setCursor(Qt.CursorShape.PointingHandCursor)
+        self.apply_btn.clicked.connect(self.apply_strategy)
+        tb_lay.addWidget(self.apply_btn)
 
-        # ===== Правая панель: ВЫВОД (скрыта по умолчанию, показ по клику) =====
+        tb_lay.addSpacing(8)
+        self.flash = QLabel("")
+        self.flash.setObjectName("flash")
+        tb_lay.addWidget(self.flash, 1)
+
+        btn_top_admin = self._menu_btn(t("ui.admin_rights"), self._relaunch_admin, role="small")
+        btn_top_admin.setFixedHeight(28)
+        tb_lay.addWidget(btn_top_admin)
+
+        m_lay.addWidget(top_bar)
+
+        # Стек страниц (QStackedWidget)
+        self.stack = QStackedWidget()
+
+        # ----- Страница 0: Служба (Service) -----
+        page0 = QWidget()
+        p0_lay = QVBoxLayout(page0)
+        p0_lay.setContentsMargins(0, 0, 0, 0)
+        p0_lay.setSpacing(10)
+
+        sec0_lbl = QLabel(t("ui.sec_service"))
+        sec0_lbl.setObjectName("section")
+        p0_lay.addWidget(sec0_lbl)
+
+        sc1_actions = QHBoxLayout()
+        sc1_actions.setSpacing(6)
+        sc1_actions.addWidget(self._menu_btn(t("ui.start_service"), lambda: self.run_action("start"), role="accent"))
+        sc1_actions.addWidget(self._menu_btn(t("ui.stop_service"), lambda: self.run_action("stop"), role="danger"))
+        sc1_actions.addWidget(self._menu_btn(t("ui.check_status"), self._open_status))
+        p0_lay.addWidget(SettingsCard(
+            "🛡️",
+            t("ui.sec_service"),
+            "Мониторинг процесса winws.exe и оперативное управление состоянием службы Windows",
+            sc1_actions,
+        ))
+
+        sc2_actions = QHBoxLayout()
+        sc2_actions.setSpacing(6)
+        sc2_actions.addWidget(self._menu_btn(t("ui.apply_best"), self.apply_best_strategy, role="primary"))
+        sc2_actions.addWidget(self._menu_btn(t("ui.quick_check"), self._quick_check))
+        p0_lay.addWidget(SettingsCard(
+            "⭐",
+            t("ui.strategy"),
+            "Применение наборов параметров winws для обхода DPI или автоматический выбор лучшей по тестам",
+            sc2_actions,
+        ))
+
+        sc3_actions = QHBoxLayout()
+        sc3_actions.setSpacing(6)
+        sc3_actions.addWidget(self._menu_btn(t("ui.install_service"), lambda: self.run_action("service_install"), role="primary"))
+        sc3_actions.addWidget(self._menu_btn(t("ui.remove_services"), lambda: self.run_action("service_remove"), role="danger"))
+        sc3_actions.addWidget(self._menu_btn(t("ui.admin_rights"), self._relaunch_admin, role="accent"))
+        p0_lay.addWidget(SettingsCard(
+            "⚙️",
+            t("ui.install_service"),
+            "Создание постоянной системной службы Windows (services.msc) с автозапуском или её удаление",
+            sc3_actions,
+        ))
+        p0_lay.addStretch(1)
+
+        scroll0 = QScrollArea()
+        scroll0.setWidgetResizable(True)
+        scroll0.setWidget(page0)
+        self.stack.addWidget(scroll0)
+
+        # ----- Страница 1: Параметры и сеть (Settings) -----
+        page1 = QWidget()
+        p1_lay = QVBoxLayout(page1)
+        p1_lay.setContentsMargins(0, 0, 0, 0)
+        p1_lay.setSpacing(10)
+
+        sec1_lbl = QLabel(t("ui.sec_settings"))
+        sec1_lbl.setObjectName("section")
+        p1_lay.addWidget(sec1_lbl)
+
+        self.lbl_doh = QLabel("[?]")
+        self.lbl_doh.setObjectName("statusBadge")
+        doh_act = QHBoxLayout()
+        doh_act.setSpacing(8)
+        doh_act.addWidget(self.lbl_doh)
+        doh_act.addWidget(self._menu_btn(t("ui.doh_sec"), self._open_doh))
+        p1_lay.addWidget(SettingsCard(
+            "🔒",
+            t("ui.doh_sec"),
+            "Безопасное шифрование DNS over HTTPS (Cloudflare, Google, AdGuard, Quad9) для IPv4 и IPv6 без утечек",
+            doh_act,
+        ))
+
+        self.lbl_gf = QLabel("[?]")
+        self.lbl_gf.setObjectName("statusBadge")
+        gf_act = QHBoxLayout()
+        gf_act.setSpacing(8)
+        gf_act.addWidget(self.lbl_gf)
+        gf_act.addWidget(self._menu_btn(t("ui.game_filter"), self._game_filter_menu))
+        p1_lay.addWidget(SettingsCard(
+            "🎮",
+            t("ui.game_filter"),
+            "Исключение портов сетевых игр из обработки winws (снижает пинг и исключает ложные блокировки)",
+            gf_act,
+        ))
+
+        self.lbl_ipset = QLabel("[?]")
+        self.lbl_ipset.setObjectName("statusBadge")
+        ipset_act = QHBoxLayout()
+        ipset_act.setSpacing(8)
+        ipset_act.addWidget(self.lbl_ipset)
+        ipset_act.addWidget(self._menu_btn(t("ui.ipset_filter"), lambda: self.run_action("toggle_ipset")))
+        p1_lay.addWidget(SettingsCard(
+            "🌐",
+            t("ui.ipset_filter"),
+            "Фильтрация трафика только по заблокированным диапазонам IP-адресов (разгружает процессор)",
+            ipset_act,
+        ))
+
+        self.lbl_autostart = QLabel("[?]")
+        self.lbl_autostart.setObjectName("statusBadge")
+        auto_act = QHBoxLayout()
+        auto_act.setSpacing(8)
+        auto_act.addWidget(self.lbl_autostart)
+        auto_act.addWidget(self._menu_btn(t("ui.autostart"), self._toggle_autostart))
+        p1_lay.addWidget(SettingsCard(
+            "🚀",
+            t("ui.autostart"),
+            "Автоматический запуск zapret-simple при старте Windows в свернутом в системный трей виде",
+            auto_act,
+        ))
+
+        self.lbl_upd = QLabel("[?]")
+        self.lbl_upd.setObjectName("statusBadge")
+        upd_act = QHBoxLayout()
+        upd_act.setSpacing(8)
+        upd_act.addWidget(self.lbl_upd)
+        upd_act.addWidget(self._menu_btn(t("ui.autoupdate_check"), lambda: self.run_action("toggle_check_updates")))
+        p1_lay.addWidget(SettingsCard(
+            "🔔",
+            t("ui.autoupdate_check"),
+            "Автоматическая проверка новых релизов ядра zapret на GitHub при каждом запуске",
+            upd_act,
+        ))
+
+        p1_lay.addWidget(SettingsCard(
+            "🎭",
+            t("ui.replace_fakes"),
+            "Генерация и подмена активных фейковых HTTP/TLS/QUIC пакетов для обхода глубокого DPI анализа",
+            self._menu_btn(t("ui.replace_fakes"), self.show_fakes),
+        ))
+        p1_lay.addStretch(1)
+
+        scroll1 = QScrollArea()
+        scroll1.setWidgetResizable(True)
+        scroll1.setWidget(page1)
+        self.stack.addWidget(scroll1)
+
+        # ----- Страница 2: Обновления и списки (Updates) -----
+        page2 = QWidget()
+        p2_lay = QVBoxLayout(page2)
+        p2_lay.setContentsMargins(0, 0, 0, 0)
+        p2_lay.setSpacing(10)
+
+        sec2_lbl = QLabel(t("ui.sec_updates"))
+        sec2_lbl.setObjectName("section")
+        p2_lay.addWidget(sec2_lbl)
+
+        p2_lay.addWidget(SettingsCard(
+            "☁️",
+            t("ui.check_updates"),
+            "Проверка наличия и загрузка свежей версии zapret из официального репозитория GitHub",
+            self._menu_btn(t("ui.check_updates"), self._open_updates),
+        ))
+        p2_lay.addWidget(SettingsCard(
+            "📥",
+            t("ui.update_ipset"),
+            "Загрузка актуальных списков заблокированных IP-подсетей для точечной фильтрации",
+            self._menu_btn(t("ui.update_ipset"), lambda: self.run_action("ipset_update")),
+        ))
+        p2_lay.addWidget(SettingsCard(
+            "📝",
+            t("ui.update_hosts"),
+            "Обновление локального списка доменных имен zapret-hosts.txt",
+            self._menu_btn(t("ui.update_hosts"), lambda: self.run_action("update_hosts")),
+        ))
+        p2_lay.addWidget(SettingsCard(
+            "🔄",
+            t("ui.restore_payload"),
+            "Восстановление стандартных бинарных шаблонов фейков при их повреждении или отсутствии",
+            self._menu_btn(t("ui.restore_payload"), lambda: self.run_action("restore_payloads")),
+        ))
+        p2_lay.addStretch(1)
+
+        scroll2 = QScrollArea()
+        scroll2.setWidgetResizable(True)
+        scroll2.setWidget(page2)
+        self.stack.addWidget(scroll2)
+
+        # ----- Страница 3: Инструменты и тесты (Tools) -----
+        page3 = QWidget()
+        p3_lay = QVBoxLayout(page3)
+        p3_lay.setContentsMargins(0, 0, 0, 0)
+        p3_lay.setSpacing(10)
+
+        sec3_lbl = QLabel(t("ui.sec_tools"))
+        sec3_lbl.setObjectName("section")
+        p3_lay.addWidget(sec3_lbl)
+
+        p3_lay.addWidget(SettingsCard(
+            "⚡",
+            t("ui.quick_check"),
+            "Мгновенный экспресс-тест YouTube 204, Discord и Google с замером задержки ping за 1 секунду",
+            self._menu_btn(t("ui.quick_check"), self._quick_check, role="primary"),
+        ))
+        p3_lay.addWidget(SettingsCard(
+            "🧪",
+            t("ui.run_tests"),
+            "Комплексное автоматическое тестирование всех доступных стратегий blockcheck",
+            self._menu_btn(t("ui.run_tests"), self.run_tests, role="accent"),
+        ))
+        p3_lay.addWidget(SettingsCard(
+            "🩺",
+            t("ui.run_diagnostics"),
+            "Анализ сетевых адаптеров, конфликтующих программ, антивирусов и других служб WinDivert",
+            self._menu_btn(t("ui.run_diagnostics"), self.run_diagnostics),
+        ))
+        p3_lay.addWidget(SettingsCard(
+            "🧹",
+            t("ui.remove_conflicts"),
+            "Принудительное завершение зависших winws.exe и выгрузка застрявшего драйвера WinDivert14",
+            self._menu_btn(t("ui.remove_conflicts"), lambda: self.run_action("remove_conflicts"), role="danger"),
+        ))
+        p3_lay.addWidget(SettingsCard(
+            "💬",
+            t("ui.clear_discord"),
+            "Очистка локального кэша Discord для сброса заблокированных сессий голосовых каналов",
+            self._menu_btn(t("ui.clear_discord"), lambda: self.run_action("clear_discord")),
+        ))
+
+        folder_actions = QHBoxLayout()
+        folder_actions.setSpacing(6)
+        folder_actions.addWidget(self._menu_btn(t("ui.select_folder"), self._choose_zapret_folder))
+        folder_actions.addWidget(self._menu_btn(t("ui.unpack_zip"), self._unpack_zapret_zip))
+        folder_actions.addWidget(self._menu_btn(t("ui.open_original_service"), lambda: self.run_action("open_original_service")))
+        p3_lay.addWidget(SettingsCard(
+            "📁",
+            "Управление каталогом zapret",
+            "Выбор сторонней папки zapret, распаковка скачанного архива zip или запуск оригинального service.bat",
+            folder_actions,
+        ))
+        p3_lay.addStretch(1)
+
+        scroll3 = QScrollArea()
+        scroll3.setWidgetResizable(True)
+        scroll3.setWidget(page3)
+        self.stack.addWidget(scroll3)
+
+        # ----- Страница 4: Журнал событий (Logs) -----
+        page4 = QWidget()
+        p4_lay = QVBoxLayout(page4)
+        p4_lay.setContentsMargins(0, 0, 0, 0)
+        p4_lay.setSpacing(10)
+        p4_lbl = QLabel(t("ui.output"))
+        p4_lbl.setObjectName("section")
+        p4_lay.addWidget(p4_lbl)
+        p4_hint = QLabel("Журнал вывода диагностических команд, тестов доступности и системных логов.")
+        p4_hint.setStyleSheet("color: #a1a1aa; font-size: 8.5pt;")
+        p4_lay.addWidget(p4_hint)
+        p4_lay.addStretch(1)
+        self.stack.addWidget(page4)
+
+        m_lay.addWidget(self.stack, 1)
+
+        # Синхронизируем активный таб в сайдбаре
+        idx = min(max(0, self._current_tab_index), len(self.nav_buttons) - 1)
+        self.nav_buttons[idx].setChecked(True)
+        self.stack.setCurrentIndex(min(idx, 3))
+
+        # =====================================================================
+        # 3. Нижняя выдвижная панель вывода (Collapsible Output Drawer)
+        # =====================================================================
         self.out_panel = QFrame()
         self.out_panel.setObjectName("card")
+        self.out_panel.setFixedHeight(180)
         o = QVBoxLayout(self.out_panel)
-        o.setContentsMargins(14, 10, 14, 10)
+        o.setContentsMargins(12, 8, 12, 8)
         o.setSpacing(6)
-        self.output = QTextEdit()
-        self.output.setReadOnly(True)
-        self.output.document().setMaximumBlockCount(2000)
-        self.output.setMinimumWidth(360)
-        # Заголовок панели + копирование/сохранение/очистка вывода
+
         out_head = QHBoxLayout()
         out_lbl = QLabel(t("ui.output"))
         out_lbl.setObjectName("section")
@@ -876,18 +1258,34 @@ class MainWindow(QMainWindow):
             b.clicked.connect(slot)
             out_head.addWidget(b)
         o.addLayout(out_head)
+
+        self.output = QTextEdit()
+        self.output.setReadOnly(True)
+        self.output.document().setMaximumBlockCount(2000)
         o.addWidget(self.output, 1)
+
         foot_lbl = QLabel(t("ui.footer"))
         foot_lbl.setObjectName("footer")
         o.addWidget(foot_lbl)
-        body.addWidget(self.out_panel, 2)
-        # По умолчанию вывод скрыт — показывается по кнопке в шапке или сам
-        # при старте живого вывода тестов/списочных результатов действий
+
+        m_lay.addWidget(self.out_panel)
         self.out_panel.setVisible(self._out_visible)
         self._sync_out_toggle()
 
+        root_lay.addWidget(main_area, 1)
+
         self.setCentralWidget(root)
         self.add_out(t("ui.ready_msg"), "info")
+
+    # ---------- Переключение вкладок сайдбара ----------
+    def _switch_tab(self, idx: int) -> None:
+        self._current_tab_index = idx
+        for i, btn in enumerate(self.nav_buttons):
+            btn.setChecked(i == idx)
+        if idx == 4:
+            self._show_output()
+        else:
+            self.stack.setCurrentIndex(idx)
 
     # ---------- Панель вывода: показ/скрытие ----------
     def _toggle_output(self) -> None:
@@ -913,18 +1311,61 @@ class MainWindow(QMainWindow):
         self.flash.setStyleSheet(f"color: {color};")
         self.flash.setText(str(text)[:200])
         self._flash_timer.start()
+        self.show_toast(str(text)[:120], level)
 
-    def _menu_btn(self, grid: QGridLayout, row: int, col: int, text: str,
-                  cmd: Callable[..., None], role: str = "") -> QPushButton:
-        btn = QPushButton(text)
-        if role:
-            btn.setObjectName(role)
-        btn.setMinimumHeight(34)
-        btn.setCursor(Qt.CursorShape.PointingHandCursor)
-        btn.clicked.connect(cmd)
-        grid.addWidget(btn, row, col)
-        self._menu_buttons.append(btn)
-        return btn
+    def show_toast(self, text: str, level: str = "info") -> None:
+        """Показывает ToastWidget в правом нижнем углу экрана (стиль FileSorter)."""
+        if "unittest" in sys.modules or os.environ.get("QT_QPA_PLATFORM") == "offscreen":
+            return
+        try:
+            toast = ToastWidget(text, level, self)
+            toast.show_and_fade(3500)
+        except Exception:
+            pass
+
+    def _menu_btn(
+        self,
+        text_or_grid: Any,
+        slot_or_row: Any = None,
+        role: str = "",
+        text_legacy: str = "",
+        cmd_legacy: Any = None,
+        role_legacy: str = "",
+        **kwargs: Any,
+    ) -> QPushButton:
+        """Создает и регистрирует кнопку действия (гасится при submit_action).
+        Поддерживает как сигнатуру (text, slot, role), так и legacy (grid, row, col, text, cmd, role)."""
+        if isinstance(text_or_grid, str):
+            text = text_or_grid
+            cmd = slot_or_row
+            r = role or str(kwargs.get("role_or_col") or "")
+            btn = QPushButton(text)
+            if r:
+                btn.setObjectName(r)
+            btn.setMinimumHeight(32)
+            btn.setCursor(Qt.CursorShape.PointingHandCursor)
+            if callable(cmd):
+                btn.clicked.connect(cmd)
+            self._menu_buttons.append(btn)
+            return btn
+        else:
+            grid = text_or_grid
+            row = slot_or_row
+            col = role
+            text = text_legacy
+            cmd = cmd_legacy
+            r = role_legacy or str(kwargs.get("role") or "")
+            btn = QPushButton(text)
+            if r:
+                btn.setObjectName(r)
+            btn.setMinimumHeight(32)
+            btn.setCursor(Qt.CursorShape.PointingHandCursor)
+            if callable(cmd):
+                btn.clicked.connect(cmd)
+            if grid is not None and hasattr(grid, "addWidget"):
+                grid.addWidget(btn, row, col)
+            self._menu_buttons.append(btn)
+            return btn
 
     def _switch_lang(self) -> None:
         """Переключатель ru/en: сохраняет выбор и перестраивает окно на месте."""
@@ -1081,13 +1522,20 @@ class MainWindow(QMainWindow):
         self._exiting = True
         self.close()
 
-    def _status_cell(self, grid: QGridLayout, row: int, col: int, attr: str) -> None:
+    def _status_cell(self, grid: Any, row: int = 0, col: int = 0, attr: str = "") -> None:
+        if isinstance(grid, str):
+            attr = grid
+            lbl = QLabel("—")
+            lbl.setObjectName("statusBadge")
+            lbl.setAlignment(Qt.AlignmentFlag.AlignCenter)
+            setattr(self, attr, lbl)
+            return
         lbl = QLabel("—")
         lbl.setObjectName("statusBadge")
         lbl.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        lbl.setMinimumHeight(34)
         setattr(self, attr, lbl)
-        grid.addWidget(lbl, row, col)
+        if grid is not None and hasattr(grid, "addWidget"):
+            grid.addWidget(lbl, row, col)
 
     # ---------- Вывод ----------
     def add_out(self, text: str, level: str = "info") -> None:
