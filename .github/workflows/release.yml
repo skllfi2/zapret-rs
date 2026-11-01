@@ -12,6 +12,7 @@ jobs:
   build-and-release:
     name: Build Binaries and Create Release
     runs-on: windows-latest
+    timeout-minutes: 25
     env:
       PYTHONUTF8: "1"
 

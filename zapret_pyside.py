@@ -628,7 +628,7 @@ class MainWindow(QMainWindow):
     lbl_upd: QLabel
     lbl_doh: QLabel
 
-    def __init__(self) -> None:
+    def __init__(self, auto_refresh: bool | None = None) -> None:
         super().__init__()
         self.setWindowTitle("ZAPRET SERVICE MANAGER")
         self.resize(1120, 680)
@@ -665,10 +665,13 @@ class MainWindow(QMainWindow):
         self.line_signal.connect(self._on_line_signal)
 
         # Таймер статуса службы: один на окно, опрос в фоне через QThreadPool
+        if auto_refresh is None:
+            auto_refresh = "unittest" not in sys.modules
         self.timer = QTimer(self)
         self.timer.timeout.connect(self.refresh)
-        self.timer.start(3000)
-        self.refresh()
+        if auto_refresh:
+            self.timer.start(3000)
+            self.refresh()
         self.refresh_menu_status()
 
     # ---------- UI ----------

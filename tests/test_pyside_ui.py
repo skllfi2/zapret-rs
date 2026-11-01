@@ -44,6 +44,9 @@ class TestPySideUI(unittest.TestCase):
         cls.QLabel = QLabel
         cls.app = QApplication.instance() or QApplication([])
         cls.win = z.MainWindow()
+        cls.win.timer.stop()
+        cls.win._flash_timer.stop()
+        cls.win.pool.waitForDone(1000)
         # Окно должно быть показано: isVisible() скрытого окна всегда False,
         # и проверки видимости панели вывода потеряли бы смысл
         cls.win.show()
@@ -51,7 +54,11 @@ class TestPySideUI(unittest.TestCase):
 
     @classmethod
     def tearDownClass(cls):
+        cls.win._exiting = True
+        cls.win.timer.stop()
+        cls.win._flash_timer.stop()
         cls.win.close()
+        cls.win.pool.waitForDone(1000)
         # Вернуть и память, и файл настроек на язык пользователя (не тащим
         # тестовый "en" в остальные тесты и в реальную среду)
         cls.i18n.save(cls._orig_lang)
@@ -254,11 +261,17 @@ class TestPySideActions(unittest.TestCase):
         cls.z, cls.i18n = z, i18n
         cls.app = QApplication.instance() or QApplication([])
         cls.win = z.MainWindow()
+        cls.win.timer.stop()
+        cls.win._flash_timer.stop()
+        cls.win.pool.waitForDone(1000)
 
     @classmethod
     def tearDownClass(cls):
         cls.win._exiting = True
+        cls.win.timer.stop()
+        cls.win._flash_timer.stop()
         cls.win.close()
+        cls.win.pool.waitForDone(1000)
 
     def _wait(self, pred, tries=60):
         for _ in range(tries):
@@ -934,12 +947,18 @@ class TestPySideTray(unittest.TestCase):
         cls._orig_avail = QSystemTrayIcon.isSystemTrayAvailable
         QSystemTrayIcon.isSystemTrayAvailable = staticmethod(lambda: True)
         cls.win = z.MainWindow()
+        cls.win.timer.stop()
+        cls.win._flash_timer.stop()
+        cls.win.pool.waitForDone(1000)
 
     @classmethod
     def tearDownClass(cls):
         cls.QSystemTrayIcon.isSystemTrayAvailable = cls._orig_avail
         cls.win._exiting = True
+        cls.win.timer.stop()
+        cls.win._flash_timer.stop()
         cls.win.close()
+        cls.win.pool.waitForDone(1000)
 
     def test_tray_created_with_localized_menu(self):
         self.assertIsNotNone(self.win.tray, "Трей не создан при доступном системном")
@@ -999,11 +1018,17 @@ class TestPySideNewUIFeatures(unittest.TestCase):
         cls.z, cls.i18n = z, i18n
         cls.app = QApplication.instance() or QApplication([])
         cls.win = z.MainWindow()
+        cls.win.timer.stop()
+        cls.win._flash_timer.stop()
+        cls.win.pool.waitForDone(1000)
 
     @classmethod
     def tearDownClass(cls):
         cls.win._exiting = True
+        cls.win.timer.stop()
+        cls.win._flash_timer.stop()
         cls.win.close()
+        cls.win.pool.waitForDone(1000)
 
     def test_doh_dialog_lifecycle(self):
         with mock.patch.object(self.win, "submit") as submit_m, \
