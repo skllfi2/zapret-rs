@@ -63,6 +63,10 @@ class TestPySideUI(unittest.TestCase):
         # тестовый "en" в остальные тесты и в реальную среду)
         cls.i18n.save(cls._orig_lang)
 
+    def tearDown(self):
+        self.win.pool.waitForDone(3000)
+        self.app.processEvents()
+
     def _btn_texts(self):
         return [b.text() for b in self.win.findChildren(self.QPushButton)]
 
@@ -164,9 +168,9 @@ class TestPySideUI(unittest.TestCase):
         self.assertIn("general", self.win.strat_box.currentText())
         self.assertIn(need, self.win.flash.text())
 
-    def _wait_best_done(self, cond):
+    def _wait_best_done(self, cond, tries=150):
         import time
-        for _ in range(80):
+        for _ in range(tries):
             self.app.processEvents()
             time.sleep(0.02)
             if cond():
@@ -273,7 +277,13 @@ class TestPySideActions(unittest.TestCase):
         cls.win.close()
         cls.win.pool.waitForDone(1000)
 
-    def _wait(self, pred, tries=60):
+    def tearDown(self):
+        self.win.pool.waitForDone(3000)
+        self.app.processEvents()
+        self.win._busy = False
+        self.win._tests_running = False
+
+    def _wait(self, pred, tries=150):
         for _ in range(tries):
             self.app.processEvents()
             time.sleep(0.02)
@@ -344,7 +354,7 @@ class TestPySideActions(unittest.TestCase):
              mock.patch("service_manager.apply_strategy",
                         return_value={"ok": True, "service": "применено"}):
             self.win.apply_strategy()
-        ok = self._wait(lambda: "применено" in self.win.flash.text())
+            ok = self._wait(lambda: "применено" in self.win.flash.text())
         self.assertTrue(ok, self.win.flash.text())
 
     # ---------- Действия и ветки _action_done ----------
@@ -354,7 +364,8 @@ class TestPySideActions(unittest.TestCase):
         with mock.patch("service_manager.run_service_action",
                         return_value={"ok": True, "service": "статус-ок"}):
             self.win.run_action("service_status")
-        self._wait(lambda: "статус-ок" in self.win.flash.text())
+            ok = self._wait(lambda: "статус-ок" in self.win.flash.text())
+        self.assertTrue(ok)
         # Итог — во флеш-статусе; служебные строки ">>> ..." в логе больше нет
         self.assertIn("статус-ок", self.win.flash.text())
         self.assertNotIn(">>>", self.win.output.toPlainText())
@@ -387,7 +398,7 @@ class TestPySideActions(unittest.TestCase):
         with mock.patch("service_manager.run_service_action",
                         return_value={"ok": True, "service": "gf-ok"}) as m:
             self.win._set_game_filter("tcp")
-        self._wait(lambda: "gf-ok" in self.win.flash.text())
+            self.assertTrue(self._wait(lambda: "gf-ok" in self.win.flash.text()))
         self.assertIn("gf-ok", self.win.flash.text())
         self.assertTrue(m.called)
 
@@ -407,11 +418,15 @@ class TestPySideActions(unittest.TestCase):
                         return_value={"ok": False, "problems": ["проблема-1"]}), \
              mock.patch.object(self.z.QMessageBox, "warning",
                                side_effect=lambda *a: warned.append(a)):
-            self.win.run_tests()
-            # Ждём доставку результата ВНУТРИ with: после выхода мок снят и
-            # настоящий QMessageBox.warning заморозит тест модальным окном
-            self.assertTrue(self._wait(lambda: warned),
-                            "предупреждение о prereq не показано")
+            try:
+                self.win.run_tests()
+                # Ждём доставку результата ВНУТРИ with: после выхода мок снят и
+                # настоящий QMessageBox.warning заморозит тест модальным окном
+                self.assertTrue(self._wait(lambda: warned),
+                                "предупреждение о prereq не показано")
+            finally:
+                self.win.pool.waitForDone(3000)
+                self.app.processEvents()
         text = warned[0][2]                                   # текст диалога
         self.assertIn("проблема-1", text)
         self.assertIn(self.i18n.t("ui.fix_errors"), text)
@@ -432,12 +447,16 @@ class TestPySideActions(unittest.TestCase):
         with mock.patch("service_manager.run_service_action",
                         return_value={"ok": True, "problems": []}), \
              mock.patch.object(self.z, "TestDialog", _Reject):
-            self.win.run_tests()
-            # Ждём ПОЛНОЙ доставки результата воркера: диалог создаётся и закрывается
-            # внутри колбэка. Без этого запоздавший finished-сигнал выстрелит уже в
-            # чужом тесте, где TestDialog снова настоящий и exec() заблокирует навсегда.
-            self.assertTrue(self._wait(lambda: dialogs),
-                            "диалог предпроверки не был показан")
+            try:
+                self.win.run_tests()
+                # Ждём ПОЛНОЙ доставки результата воркера: диалог создаётся и закрывается
+                # внутри колбэка. Без этого запоздавший finished-сигнал выстрелит уже в
+                # чужом тесте, где TestDialog снова настоящий и exec() заблокирует навсегда.
+                self.assertTrue(self._wait(lambda: dialogs),
+                                "диалог предпроверки не был показан")
+            finally:
+                self.win.pool.waitForDone(3000)
+                self.app.processEvents()
         self.assertFalse(self.win._tests_running)   # отказ — тесты не запущены
 
     def test_run_tests_dialog_accept_runs_worker(self):
@@ -460,8 +479,12 @@ class TestPySideActions(unittest.TestCase):
              mock.patch("service_manager.run_tests",
                         return_value={"ok": True, "service": "тесты-готово",
                                       "stdout": ["строка-теста"]}):
-            self.win.run_tests()
-            ok = self._wait(lambda: "тесты-готово" in self.win.flash.text())
+            try:
+                self.win.run_tests()
+                ok = self._wait(lambda: "тесты-готово" in self.win.flash.text())
+            finally:
+                self.win.pool.waitForDone(3000)
+                self.app.processEvents()
         self.assertTrue(ok, self.win.flash.text())
         self.assertIn("строка-теста", self.win.output.toPlainText())   # живой вывод
         self.assertTrue(self.win._out_visible)                         # панель показана сама
@@ -739,11 +762,15 @@ class TestPySideActions(unittest.TestCase):
         self.assertFalse(d["running"])
 
     def test_refresh_busy_guard_and_status_done(self):
-        self.win._busy = False
-        self.win.refresh()
-        self.assertTrue(self.win._busy)          # первый вызов ставит флаг
-        self.win.refresh()                        # второй — без очереди в пул
-        self.assertTrue(self._wait(lambda: not self.win._busy))
+        import unittest.mock as mock
+        with mock.patch("service_manager.query_status", return_value="Running"), \
+             mock.patch("service_manager.is_running", return_value=True), \
+             mock.patch("service_manager.payloads_status", return_value={"ok": True, "missing": []}):
+            self.win._busy = False
+            self.win.refresh()
+            self.assertTrue(self.win._busy)          # первый вызов ставит флаг
+            self.win.refresh()                        # второй — без очереди в пул
+            self.assertTrue(self._wait(lambda: not self.win._busy))
         self.win._status_done({"status": "Running", "running": True,
                                "payloads": {"ok": False, "missing": ["a.bin", "b.bin"]}})
         self.assertEqual(self.win.status_text.text(), "Running")
@@ -757,7 +784,7 @@ class TestPySideActions(unittest.TestCase):
                 "ipset": "any", "check_updates": "on", "admin": True}
         with mock.patch("service_manager.run_service_action", return_value=menu):
             self.win.refresh_menu_status()
-        self.assertTrue(self._wait(lambda: self.win.lbl_gf.text() == "[all]"))
+            self.assertTrue(self._wait(lambda: self.win.lbl_gf.text() == "[all]"))
         self.assertEqual(self.win.version_lbl.text(), "v9.9.9")
         self.assertEqual(self.win.lbl_ipset.text(), "[any]")
         self.assertEqual(self.win.lbl_upd.text(), "[on]")
@@ -816,8 +843,8 @@ class TestPySideActions(unittest.TestCase):
         with mock.patch("service_manager.run_service_action",
                         return_value={"ok": True, "stdout": []}):
             self.win.show_fakes()
-        self.assertTrue(self._wait(
-            lambda: self.i18n.t("ui.no_bins") in self.win.output.toPlainText()))
+            self.assertTrue(self._wait(
+                lambda: self.i18n.t("ui.no_bins") in self.win.output.toPlainText()))
         self.win._fakes_replaced({"ok": False, "stderr": "нет такого fake"})
         self.assertIn("нет такого fake", self.win.flash.text())
         self.win._fakes_replaced({"ok": True, "stdout": "заменено"})
