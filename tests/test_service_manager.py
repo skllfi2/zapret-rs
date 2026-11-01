@@ -175,11 +175,13 @@ class TestServiceManager(unittest.TestCase):
                         f"winws.exe не найден в {BIN_DIR}")
 
     def test_payloads_status(self):
-        from service_manager import payloads_status
+        from service_manager import invalidate_payloads_cache, payloads_status
+        invalidate_payloads_cache()
         r = payloads_status()
         self.assertIsInstance(r["total"], int)
         self.assertIsInstance(r["missing"], list)
         self.assertIn("ok", r)
+        invalidate_payloads_cache()
         # Мок: все обязательные файлы на месте
         with mock.patch("service_manager.os.path.isdir", return_value=True), \
              mock.patch("service_manager.os.listdir",
@@ -189,6 +191,7 @@ class TestServiceManager(unittest.TestCase):
             r2 = payloads_status()
         self.assertTrue(r2["ok"])
         self.assertEqual(r2["missing"], [])
+        invalidate_payloads_cache()
 
     def test_restore_payloads(self):
         import shutil

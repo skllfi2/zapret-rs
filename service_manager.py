@@ -23,7 +23,7 @@ from zapret_core.scm import (install_service, uninstall_service, start_service,
                              query_status, is_running)
 from zapret_core.winws import (winws_is_running, replace_fakes, list_fakes,
                                payloads_status, find_payload_source,
-                               restore_payloads)
+                               restore_payloads, invalidate_payloads_cache)
 from zapret_core.lists import (ipset_update, ipset_status, toggle_ipset,
                                load_user_lists, update_hosts)
 from zapret_core.settings import (game_filter_status, game_filter_label,
