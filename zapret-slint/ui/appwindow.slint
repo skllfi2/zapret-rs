@@ -1,18 +1,24 @@
 import { ScrollView } from "std-widgets.slint";
 
 // ============================================================================
-// DESIGN TOKENS (WinUI 3 Dark Mica Palette)
+// WINDOWS 11 FLUENT DARK TOKENS (Calm, Professional Slate/Zinc Palette)
 // ============================================================================
-// Canvas: #18191c
-// Sidebar: #131417
-// Cards: #1e2026, hover: #242730, active: #2a2d38
-// Card Border: #2b303c
-// Accent: #0078d4, Accent Hover: #1084d8, Accent Active: #006cbe
-// Text Primary: #f3f4f6, Secondary: #9ca3af, Muted: #6b7280
-// Status Colors: Green: #22c55e, Amber: #f59e0b, Red: #ef4444
+// Canvas (Mica/Acrylic): #202020
+// Sidebar: #1c1c1c (border #2c2c2c)
+// Card Background: #2b2b2b (border #333333, hover border #444444)
+// Inner Card / Icon Container: #333333
+// Primary Accent: #0078d4 (muted, professional Windows blue)
+// Text Colors:
+//   Primary:   #ffffff (high contrast, crisp)
+//   Secondary: #cccccc (clean readable gray)
+//   Muted:     #888888 (subtle guidance text)
+// Status Colors (Subtle, not oversaturated):
+//   Green: #107c41 (or #22c55e muted)
+//   Amber: #d97706
+//   Red:   #dc2626
 
 // ============================================================================
-// 1. CUSTOM WINUI 3 BUTTON
+// 1. WINUI 3 BUTTON
 // ============================================================================
 component WinButton inherits Rectangle {
     in property <string> text: "";
@@ -24,34 +30,34 @@ component WinButton inherits Rectangle {
 
     min-width: root.min_w;
     height: 32px;
-    border-radius: 6px;
+    border-radius: 5px;
     border-width: 1px;
 
-    background: !root.enabled ? #1f232b :
-                root.danger ? (touch.pressed ? #b91c1c : (touch.has-hover ? #dc2626 : #ef4444.transparentize(0.8))) :
-                root.primary ? (touch.pressed ? #0060aa : (touch.has-hover ? #1084d8 : #0078d4)) :
-                (touch.pressed ? #2d3340 : (touch.has-hover ? #252b37 : #1c202a));
+    background: !root.enabled ? #2a2a2a :
+                root.danger ? (touch.pressed ? #991b1b : (touch.has-hover ? #b91c1c : #2f2525)) :
+                root.primary ? (touch.pressed ? #005a9e : (touch.has-hover ? #106ebe : #0078d4)) :
+                (touch.pressed ? #323232 : (touch.has-hover ? #3a3a3a : #2e2e2e));
 
-    border-color: !root.enabled ? #262c37 :
-                  root.danger ? (touch.has-hover ? #ef4444 : #ef4444.transparentize(0.5)) :
-                  root.primary ? (touch.has-hover ? #38bdf8 : #0078d4.transparentize(0.3)) :
-                  (touch.has-hover ? #3b4557 : #2a313e);
+    border-color: !root.enabled ? #333333 :
+                  root.danger ? (touch.has-hover ? #ef4444 : #5c2828) :
+                  root.primary ? (touch.has-hover ? #60cdff : #0078d4) :
+                  (touch.has-hover ? #505050 : #3c3c3c);
 
-    animate background, border-color { duration: 120ms; easing: ease-out; }
+    animate background, border-color { duration: 100ms; }
 
     HorizontalLayout {
-        padding-left: 12px;
-        padding-right: 12px;
+        padding-left: 14px;
+        padding-right: 14px;
         alignment: center;
 
         Text {
             text: root.text;
             font-size: 12px;
-            font-weight: root.primary ? 600 : 500;
-            color: !root.enabled ? #6b7280 :
-                   root.danger ? (touch.has-hover ? #ffffff : #fca5a5) :
+            font-weight: root.primary ? 600 : 400;
+            color: !root.enabled ? #666666 :
+                   root.danger ? (touch.has-hover ? #ffffff : #f87171) :
                    root.primary ? #ffffff :
-                   (touch.has-hover ? #ffffff : #e2e8f0);
+                   (touch.has-hover ? #ffffff : #e0e0e0);
             vertical-alignment: center;
         }
     }
@@ -63,7 +69,7 @@ component WinButton inherits Rectangle {
 }
 
 // ============================================================================
-// 2. WINUI 3 TOGGLE SWITCH (Вместо громоздких кнопок "Сменить / Вкл / Выкл")
+// 2. WINUI 3 TOGGLE SWITCH
 // ============================================================================
 component WinToggle inherits Rectangle {
     in-out property <bool> checked: false;
@@ -71,9 +77,8 @@ component WinToggle inherits Rectangle {
     in property <string> off_label: "Выкл";
     callback toggled(bool);
 
-    width: 88px;
+    width: 84px;
     height: 30px;
-    border-radius: 15px;
     background: transparent;
 
     HorizontalLayout {
@@ -83,30 +88,30 @@ component WinToggle inherits Rectangle {
         Text {
             text: root.checked ? root.on_label : root.off_label;
             font-size: 11px;
-            font-weight: 600;
-            color: root.checked ? #4ade80 : #94a3b8;
+            font-weight: 500;
+            color: root.checked ? #e0e0e0 : #888888;
             vertical-alignment: center;
         }
 
-        // The Switch Pill
+        // Switch pill
         Rectangle {
-            width: 44px;
-            height: 24px;
-            border-radius: 12px;
-            background: root.checked ? (touch.has-hover ? #1084d8 : #0078d4) : (touch.has-hover ? #2a313e : #202530);
+            width: 40px;
+            height: 20px;
+            border-radius: 10px;
+            background: root.checked ? (touch.has-hover ? #106ebe : #0078d4) : (touch.has-hover ? #383838 : #2e2e2e);
             border-width: 1px;
-            border-color: root.checked ? #38bdf8 : #374151;
-            animate background, border-color { duration: 150ms; }
+            border-color: root.checked ? #60cdff : #4a4a4a;
+            animate background, border-color { duration: 120ms; }
 
             // Thumb
             Rectangle {
-                width: 16px;
-                height: 16px;
-                border-radius: 8px;
+                width: 12px;
+                height: 12px;
+                border-radius: 6px;
                 background: #ffffff;
-                x: root.checked ? parent.width - self.width - 4px : 4px;
+                x: root.checked ? parent.width - self.width - 3px : 4px;
                 y: (parent.height - self.height) / 2;
-                animate x { duration: 140ms; easing: ease-out; }
+                animate x { duration: 120ms; easing: ease-out; }
             }
         }
     }
@@ -124,17 +129,17 @@ component WinToggle inherits Rectangle {
 // ============================================================================
 component StatusBadge inherits Rectangle {
     in property <string> text: "";
-    in property <color> badge_color: #3b82f6;
+    in property <color> badge_color: #0078d4;
 
     background: badge_color.transparentize(0.85);
-    border-radius: 6px;
+    border-radius: 4px;
     border-width: 1px;
     border-color: badge_color.transparentize(0.5);
-    height: 24px;
+    height: 22px;
 
     HorizontalLayout {
-        padding-left: 9px;
-        padding-right: 9px;
+        padding-left: 8px;
+        padding-right: 8px;
         Text {
             text: root.text;
             font-size: 11px;
@@ -154,40 +159,40 @@ component NavItem inherits Rectangle {
     in property <bool> active: false;
     callback clicked();
 
-    height: 40px;
-    border-radius: 7px;
-    background: root.active ? #1e2636 : (touch.has-hover ? #181d28 : transparent);
-    animate background { duration: 120ms; }
+    height: 36px;
+    border-radius: 5px;
+    background: root.active ? #2e2e2e : (touch.has-hover ? #252525 : transparent);
+    animate background { duration: 100ms; }
 
     HorizontalLayout {
         padding-left: 10px;
-        padding-right: 12px;
-        spacing: 12px;
+        padding-right: 10px;
+        spacing: 10px;
         alignment: start;
 
-        // Accent indicator bar
+        // Accent indicator bar on left
         Rectangle {
             width: 3px;
-            height: 18px;
-            border-radius: 2px;
-            background: root.active ? #38bdf8 : transparent;
+            height: 16px;
+            border-radius: 1.5px;
+            background: root.active ? #60cdff : transparent;
             y: (parent.height - self.height) / 2;
-            animate background { duration: 150ms; }
+            animate background { duration: 120ms; }
         }
 
         Text {
             text: root.icon;
-            font-size: 15px;
+            font-size: 13px;
             vertical-alignment: center;
         }
 
         Text {
             text: root.text;
-            font-size: 13px;
-            font-weight: root.active ? 600 : 500;
-            color: root.active ? #ffffff : (touch.has-hover ? #f3f4f6 : #9ca3af);
+            font-size: 12px;
+            font-weight: root.active ? 600 : 400;
+            color: root.active ? #ffffff : (touch.has-hover ? #f0f0f0 : #a0a0a0);
             vertical-alignment: center;
-            animate color { duration: 120ms; }
+            animate color { duration: 100ms; }
         }
     }
 
@@ -204,12 +209,11 @@ component SettingsCard inherits Rectangle {
     in property <string> title: "";
     in property <string> description: "";
 
-    background: #181b24;
-    border-radius: 8px;
+    background: #2b2b2b;
+    border-radius: 6px;
     border-width: 1px;
-    border-color: touch.has-hover ? #323b4d : #232938;
-    min-height: 60px;
-    animate border-color, background { duration: 120ms; }
+    border-color: #383838;
+    min-height: 56px;
 
     HorizontalLayout {
         padding-left: 16px;
@@ -220,22 +224,22 @@ component SettingsCard inherits Rectangle {
         alignment: space-between;
 
         HorizontalLayout {
-            spacing: 14px;
+            spacing: 12px;
             alignment: start;
             horizontal-stretch: 1;
 
             Rectangle {
-                width: 36px;
-                height: 36px;
-                border-radius: 8px;
-                background: #1f2533;
+                width: 32px;
+                height: 32px;
+                border-radius: 6px;
+                background: #333333;
                 border-width: 1px;
-                border-color: #2b3447;
+                border-color: #3f3f3f;
                 y: (parent.height - self.height) / 2;
 
                 Text {
                     text: root.icon;
-                    font-size: 16px;
+                    font-size: 14px;
                     horizontal-alignment: center;
                     vertical-alignment: center;
                 }
@@ -254,7 +258,7 @@ component SettingsCard inherits Rectangle {
                 Text {
                     text: root.description;
                     font-size: 11px;
-                    color: #94a3b8;
+                    color: #aaaaaa;
                     wrap: word-wrap;
                 }
             }
@@ -262,26 +266,24 @@ component SettingsCard inherits Rectangle {
 
         HorizontalLayout {
             alignment: end;
-            spacing: 10px;
+            spacing: 8px;
             @children
         }
     }
-
-    touch := TouchArea {}
 }
 
 // ============================================================================
 // MAIN WINDOW
 // ============================================================================
 export component MainWindow inherits Window {
-    title: "ZAPRET SIMPLE (Native Slint · WinUI 3)";
+    title: "ZAPRET SIMPLE";
     icon: @image-url("../assets/app.png");
-    min-width: 1000px;
-    min-height: 680px;
-    preferred-width: 1080px;
-    preferred-height: 740px;
-    background: #12141a;
-    default-font-family: "Segoe UI";
+    min-width: 980px;
+    min-height: 640px;
+    preferred-width: 1040px;
+    preferred-height: 700px;
+    background: #202020;
+    default-font-family: "Segoe UI Variable, Segoe UI";
 
     in property <string> zapret_version: "v1.10.4";
     in property <string> service_status: "Остановлена";
@@ -306,7 +308,7 @@ export component MainWindow inherits Window {
     in property <bool> is_running: false;
 
     in-out property <int> active_tab: 0;
-    // Drawer: скрываемая консоль вывода
+    // Скрываемый нижний терминал вывода
     in-out property <bool> console_open: false;
 
     callback toggle_service();
@@ -340,10 +342,10 @@ export component MainWindow inherits Window {
         // ЛЕВЫЙ САЙДБАР (SIDEBAR)
         // ====================================================================
         Rectangle {
-            width: 240px;
-            background: #151720;
+            width: 220px;
+            background: #1c1c1c;
             border-width: 1px;
-            border-color: #202431;
+            border-color: #2c2c2c;
 
             VerticalLayout {
                 padding-top: 14px;
@@ -354,17 +356,17 @@ export component MainWindow inherits Window {
 
                 // Заголовок бренда
                 HorizontalLayout {
-                    spacing: 11px;
+                    spacing: 10px;
                     alignment: start;
 
                     Rectangle {
-                        width: 36px;
-                        height: 36px;
-                        border-radius: 9px;
+                        width: 32px;
+                        height: 32px;
+                        border-radius: 6px;
                         background: #0078d4;
                         Text {
                             text: "⚡";
-                            font-size: 18px;
+                            font-size: 16px;
                             horizontal-alignment: center;
                             vertical-alignment: center;
                         }
@@ -372,31 +374,29 @@ export component MainWindow inherits Window {
 
                     VerticalLayout {
                         alignment: center;
-                        spacing: 2px;
+                        spacing: 1px;
                         Text {
                             text: "ZAPRET SIMPLE";
-                            font-size: 14px;
-                            font-weight: 800;
+                            font-size: 13px;
+                            font-weight: 700;
                             color: #ffffff;
-                            letter-spacing: 0.5px;
+                            letter-spacing: 0.3px;
                         }
                         Text {
-                            text: "WINUI 3 · NATIVE RUST";
+                            text: "WINDOWS DPI BYPASS";
                             font-size: 9px;
-                            font-weight: 700;
-                            color: #38bdf8;
-                            letter-spacing: 0.6px;
+                            color: #888888;
                         }
                     }
                 }
 
-                // Индикаторы версии и UAC
+                // Индикаторы версии и прав
                 HorizontalLayout {
                     spacing: 6px;
                     alignment: start;
                     StatusBadge {
                         text: root.zapret_version;
-                        badge_color: #38bdf8;
+                        badge_color: #60cdff;
                     }
                     StatusBadge {
                         text: root.admin_status;
@@ -406,14 +406,14 @@ export component MainWindow inherits Window {
 
                 // Карточка статуса сервиса
                 Rectangle {
-                    background: #1b1e2b;
-                    border-radius: 8px;
+                    background: #252525;
+                    border-radius: 6px;
                     border-width: 1px;
-                    border-color: #283042;
+                    border-color: #333333;
 
                     VerticalLayout {
                         padding: 10px;
-                        spacing: 9px;
+                        spacing: 8px;
 
                         HorizontalLayout {
                             spacing: 8px;
@@ -428,7 +428,7 @@ export component MainWindow inherits Window {
                             Text {
                                 text: root.service_status;
                                 font-size: 12px;
-                                font-weight: 700;
+                                font-weight: 600;
                                 color: root.status_color;
                                 vertical-alignment: center;
                             }
@@ -440,31 +440,31 @@ export component MainWindow inherits Window {
                                 text: root.is_running ? "⏹ Стоп" : "▶ Пуск";
                                 primary: !root.is_running;
                                 danger: root.is_running;
-                                min_w: 100px;
+                                min_w: 90px;
                                 clicked => { root.toggle_service(); }
                             }
                             WinButton {
                                 text: "Инфо";
-                                min_w: 70px;
+                                min_w: 60px;
                                 clicked => { root.service_status_details(); }
                             }
                         }
                     }
                 }
 
-                Rectangle { height: 1px; background: #202431; }
+                Rectangle { height: 1px; background: #2c2c2c; }
 
                 Text {
-                    text: "НАВИГАЦИЯ";
+                    text: "МЕНЮ";
                     font-size: 10px;
-                    font-weight: 800;
-                    color: #6b7280;
-                    letter-spacing: 0.8px;
+                    font-weight: 700;
+                    color: #777777;
+                    letter-spacing: 0.5px;
                 }
 
-                // Навигация
+                // Вкладки
                 VerticalLayout {
-                    spacing: 4px;
+                    spacing: 2px;
                     NavItem {
                         icon: "🛡️";
                         text: "Служба";
@@ -498,9 +498,9 @@ export component MainWindow inherits Window {
                 }
 
                 Rectangle { vertical-stretch: 1; }
-                Rectangle { height: 1px; background: #202431; }
+                Rectangle { height: 1px; background: #2c2c2c; }
 
-                // Футер сайдбара: звук
+                // Футер
                 WinButton {
                     text: root.sound_enabled ? "🔊 Звуки: Вкл" : "🔇 Звуки: Выкл";
                     clicked => { root.toggle_sound(); }
@@ -513,41 +513,41 @@ export component MainWindow inherits Window {
         // ====================================================================
         VerticalLayout {
             padding: 16px;
-            spacing: 12px;
+            spacing: 10px;
             horizontal-stretch: 1;
 
             // Верхняя полоса страницы
             Rectangle {
-                height: 48px;
-                background: #171922;
-                border-radius: 8px;
+                height: 44px;
+                background: #252525;
+                border-radius: 6px;
                 border-width: 1px;
-                border-color: #242a38;
+                border-color: #333333;
 
                 HorizontalLayout {
-                    padding-left: 18px;
-                    padding-right: 18px;
+                    padding-left: 16px;
+                    padding-right: 16px;
                     alignment: space-between;
 
                     Text {
-                        text: root.active_tab == 0 ? "🛡️ Управление службой и стратегиями" :
-                              root.active_tab == 1 ? "⚙️ Параметры и фильтрация трафика" :
-                              root.active_tab == 2 ? "🔄 Обновление списков и компонентов" :
-                              root.active_tab == 3 ? "🛠️ Системная диагностика и инструменты" :
-                                                     "📋 Полноразмерный журнал событий";
-                        font-size: 14px;
-                        font-weight: 700;
+                        text: root.active_tab == 0 ? "Управление службой и стратегиями" :
+                              root.active_tab == 1 ? "Параметры и фильтрация трафика" :
+                              root.active_tab == 2 ? "Обновление списков и компонентов" :
+                              root.active_tab == 3 ? "Системная диагностика и инструменты" :
+                                                     "Журнал событий";
+                        font-size: 13px;
+                        font-weight: 600;
                         color: #ffffff;
                         vertical-alignment: center;
                     }
 
-                    // Быстрый переключатель консоли справа в шапке
                     if root.active_tab != 4: HorizontalLayout {
                         alignment: end;
                         spacing: 8px;
 
                         WinButton {
-                            text: root.console_open ? "▼ Скрыть консоль" : "▲ Консоль вывода";
+                            text: root.console_open ? "▼ Скрыть лог" : "▲ Показать лог";
+                            min_w: 110px;
                             clicked => { root.console_open = !root.console_open; }
                         }
                     }
@@ -559,21 +559,22 @@ export component MainWindow inherits Window {
             // ================================================================
             if root.active_tab == 0: ScrollView {
                 VerticalLayout {
-                    spacing: 10px;
+                    spacing: 8px;
                     padding-right: 4px;
 
                     SettingsCard {
                         icon: "🎯";
                         title: "Активная стратегия обхода DPI";
-                        description: "Выберите готовый пресет параметров winws и примените к службе";
+                        description: "Пресет параметров winws для обхода замедлений YouTube и Discord";
 
                         StatusBadge {
                             text: root.strategies.length > 0 ? root.strategies[root.selected_strategy_index] : "general";
-                            badge_color: #38bdf8;
+                            badge_color: #60cdff;
                             y: (parent.height - self.height) / 2;
                         }
                         WinButton {
-                            text: "Сменить пресет";
+                            text: "Сменить";
+                            min_w: 75px;
                             clicked => {
                                 if (root.strategies.length > 0) {
                                     root.selected_strategy_index = (root.selected_strategy_index + 1) >= root.strategies.length ? 0 : root.selected_strategy_index + 1;
@@ -584,6 +585,7 @@ export component MainWindow inherits Window {
                         WinButton {
                             text: "Применить";
                             primary: true;
+                            min_w: 85px;
                             clicked => { root.apply_strategy(); }
                             y: (parent.height - self.height) / 2;
                         }
@@ -592,17 +594,19 @@ export component MainWindow inherits Window {
                     SettingsCard {
                         icon: "🛡️";
                         title: "Служба Windows (zapret)";
-                        description: "Фоновый процесс WinWS в диспетчере служб Windows SCM";
+                        description: "Управление фоновым сервисом WinWS в диспетчере служб Windows";
 
                         WinButton {
-                            text: root.is_running ? "⏹ Остановить службу" : "▶ Запустить службу";
+                            text: root.is_running ? "⏹ Остановить" : "▶ Запустить";
                             primary: !root.is_running;
                             danger: root.is_running;
+                            min_w: 105px;
                             clicked => { root.toggle_service(); }
                             y: (parent.height - self.height) / 2;
                         }
                         WinButton {
-                            text: "Детали статуса";
+                            text: "Статус службы";
+                            min_w: 100px;
                             clicked => {
                                 root.console_open = true;
                                 root.service_status_details();
@@ -613,17 +617,19 @@ export component MainWindow inherits Window {
 
                     SettingsCard {
                         icon: "⚙️";
-                        title: "Специальные действия";
-                        description: "Запуск оригинального bat-скрипта или полное удаление службы";
+                        title: "Системные действия";
+                        description: "Запуск оригинального bat-скрипта или удаление службы из системы";
 
                         WinButton {
                             text: "Оригинальный service.bat";
+                            min_w: 160px;
                             clicked => { root.open_original_service(); }
                             y: (parent.height - self.height) / 2;
                         }
                         WinButton {
                             text: "Удалить службу";
                             danger: true;
+                            min_w: 115px;
                             clicked => { root.remove_service(); }
                             y: (parent.height - self.height) / 2;
                         }
@@ -636,21 +642,22 @@ export component MainWindow inherits Window {
             // ================================================================
             if root.active_tab == 1: ScrollView {
                 VerticalLayout {
-                    spacing: 10px;
+                    spacing: 8px;
                     padding-right: 4px;
 
                     SettingsCard {
                         icon: "🎮";
                         title: "Игровой фильтр (GameFilter)";
-                        description: "Исключение игровых UDP/P2P портов для защиты от пинга и лагов";
+                        description: "Исключение игровых UDP/P2P портов для защиты от задержек";
 
                         StatusBadge {
                             text: root.game_filter_text;
-                            badge_color: root.game_filter_text == "Отключен" ? #94a3b8 : #22c55e;
+                            badge_color: root.game_filter_text == "Отключен" ? #888888 : #22c55e;
                             y: (parent.height - self.height) / 2;
                         }
                         WinButton {
-                            text: "Сменить режим";
+                            text: "Сменить";
+                            min_w: 80px;
                             clicked => { root.toggle_game_filter(); }
                             y: (parent.height - self.height) / 2;
                         }
@@ -659,7 +666,7 @@ export component MainWindow inherits Window {
                     SettingsCard {
                         icon: "🌐";
                         title: "Фильтр IPSet (ipset-all.txt)";
-                        description: "Направлять через DPI-фильтр только трафик к заблокированным ресурсам";
+                        description: "Фильтровать трафик только к заблокированным ресурсам из базы";
 
                         WinToggle {
                             checked: root.ipset_active;
@@ -677,11 +684,12 @@ export component MainWindow inherits Window {
 
                         StatusBadge {
                             text: root.doh_provider_text;
-                            badge_color: root.doh_active ? #22c55e : #94a3b8;
+                            badge_color: root.doh_active ? #22c55e : #888888;
                             y: (parent.height - self.height) / 2;
                         }
                         WinButton {
-                            text: "Сменить DoH";
+                            text: "Сменить";
+                            min_w: 80px;
                             clicked => { root.toggle_doh(); }
                             y: (parent.height - self.height) / 2;
                         }
@@ -690,7 +698,7 @@ export component MainWindow inherits Window {
                     SettingsCard {
                         icon: "🚀";
                         title: "Автозагрузка с Windows";
-                        description: "Автоматический старт zapret-simple при входе пользователя в систему";
+                        description: "Автоматический старт zapret-simple в системный трей при входе в Windows";
 
                         WinToggle {
                             checked: root.autostart_active;
@@ -704,7 +712,7 @@ export component MainWindow inherits Window {
                     SettingsCard {
                         icon: "🔄";
                         title: "Автопроверка обновлений";
-                        description: "Проверять новые релизы zapret на GitHub при каждом запуске программы";
+                        description: "Проверять наличие свежих версий zapret на GitHub при запуске программы";
 
                         WinToggle {
                             checked: root.check_updates_text == "Включена";
@@ -721,7 +729,8 @@ export component MainWindow inherits Window {
                         description: "Инспекция установленных бинарных фейк-пакетов в папке bin/";
 
                         WinButton {
-                            text: "Список фейков в bin/";
+                            text: "Список фейков";
+                            min_w: 110px;
                             clicked => {
                                 root.console_open = true;
                                 root.inspect_fakes();
@@ -737,17 +746,18 @@ export component MainWindow inherits Window {
             // ================================================================
             if root.active_tab == 2: ScrollView {
                 VerticalLayout {
-                    spacing: 10px;
+                    spacing: 8px;
                     padding-right: 4px;
 
                     SettingsCard {
                         icon: "🌐";
                         title: "Обновление базы IPSet";
-                        description: "Загрузить свежий список ipset-service.txt из репозитория Flowseal";
+                        description: "Загрузить актуальный список ipset-service.txt из репозитория Flowseal";
 
                         WinButton {
                             text: "Обновить IPSet";
                             primary: true;
+                            min_w: 120px;
                             clicked => {
                                 root.console_open = true;
                                 root.update_ipset();
@@ -758,11 +768,12 @@ export component MainWindow inherits Window {
 
                     SettingsCard {
                         icon: "📄";
-                        title: "Проверка системного файла Hosts";
-                        description: "Поиск записей, блокирующих сервисы YouTube, Discord и другие";
+                        title: "Проверка файла Hosts";
+                        description: "Поиск записей в hosts, нарушающих работу сервисов YouTube и Discord";
 
                         WinButton {
                             text: "Проверить Hosts";
+                            min_w: 120px;
                             clicked => {
                                 root.console_open = true;
                                 root.check_hosts();
@@ -773,11 +784,12 @@ export component MainWindow inherits Window {
 
                     SettingsCard {
                         icon: "🚀";
-                        title: "Проверка обновлений zapret";
-                        description: "Сравнение текущей локальной версии с последним релизом на GitHub";
+                        title: "Проверка релизов zapret";
+                        description: "Сравнение текущей локальной версии с последней на GitHub";
 
                         WinButton {
-                            text: "Проверить обновления";
+                            text: "Проверить релизы";
+                            min_w: 120px;
                             clicked => {
                                 root.console_open = true;
                                 root.check_updates();
@@ -793,7 +805,7 @@ export component MainWindow inherits Window {
             // ================================================================
             if root.active_tab == 3: ScrollView {
                 VerticalLayout {
-                    spacing: 10px;
+                    spacing: 8px;
                     padding-right: 4px;
 
                     SettingsCard {
@@ -804,6 +816,7 @@ export component MainWindow inherits Window {
                         WinButton {
                             text: "Запустить диагностику";
                             primary: true;
+                            min_w: 155px;
                             clicked => {
                                 root.console_open = true;
                                 root.run_diagnostics();
@@ -815,15 +828,17 @@ export component MainWindow inherits Window {
                     SettingsCard {
                         icon: "⚡";
                         title: "Тестирование и конфликты";
-                        description: "Запуск тестового скрипта zapret.ps1 и нейтрализация конфликтующих служб";
+                        description: "Запуск теста zapret.ps1 и нейтрализация конфликтующих служб";
 
                         WinButton {
-                            text: "Тесты zapret.ps1";
+                            text: "Тест zapret.ps1";
+                            min_w: 115px;
                             clicked => { root.run_tests(); }
                             y: (parent.height - self.height) / 2;
                         }
                         WinButton {
                             text: "Устранить конфликты";
+                            min_w: 140px;
                             clicked => {
                                 root.console_open = true;
                                 root.remove_conflicts();
@@ -835,10 +850,11 @@ export component MainWindow inherits Window {
                     SettingsCard {
                         icon: "🧹";
                         title: "Очистка кэша Discord";
-                        description: "Завершение зависших процессов Discord и удаление временных файлов кэша";
+                        description: "Завершение процессов Discord и очистка временных файлов кэша";
 
                         WinButton {
-                            text: "Очистить кэш Discord";
+                            text: "Очистить кэш";
+                            min_w: 110px;
                             clicked => {
                                 root.console_open = true;
                                 root.clear_discord();
@@ -853,7 +869,8 @@ export component MainWindow inherits Window {
                         description: "Ручной выбор рабочей папки или распаковка дистрибутива из ZIP архива";
 
                         WinButton {
-                            text: "Выбрать папку zapret";
+                            text: "Выбрать папку";
+                            min_w: 110px;
                             clicked => {
                                 root.console_open = true;
                                 root.select_zapret_folder();
@@ -861,7 +878,8 @@ export component MainWindow inherits Window {
                             y: (parent.height - self.height) / 2;
                         }
                         WinButton {
-                            text: "Распаковать zapret.zip";
+                            text: "Распаковать ZIP";
+                            min_w: 120px;
                             clicked => {
                                 root.console_open = true;
                                 root.unpack_zapret_zip();
@@ -877,27 +895,27 @@ export component MainWindow inherits Window {
             // ================================================================
             if root.active_tab == 4: Rectangle {
                 vertical-stretch: 1;
-                background: #0d1017;
-                border-radius: 8px;
+                background: #1b1b1b;
+                border-radius: 6px;
                 border-width: 1px;
-                border-color: #222837;
+                border-color: #2f2f2f;
 
                 VerticalLayout {
-                    padding: 14px;
-                    spacing: 10px;
+                    padding: 12px;
+                    spacing: 8px;
 
                     HorizontalLayout {
                         alignment: space-between;
                         Text {
-                            text: "ЖУРНАЛ СООБЩЕНИЙ И ВЫВОД ДИАГНОСТИКИ";
+                            text: "ЖУРНАЛ ВЫВОДА ДИАГНОСТИКИ И СЛУЖБЫ";
                             font-size: 11px;
-                            font-weight: 800;
-                            color: #64748b;
+                            font-weight: 700;
+                            color: #888888;
                             vertical-alignment: center;
                         }
                         WinButton {
                             text: "Очистить журнал";
-                            min_w: 120px;
+                            min_w: 110px;
                             clicked => { root.clear_log(); }
                         }
                     }
@@ -907,7 +925,7 @@ export component MainWindow inherits Window {
                             text: root.log_output;
                             font-family: "Cascadia Mono, Consolas";
                             font-size: 12px;
-                            color: #e2e8f0;
+                            color: #d4d4d4;
                             wrap: word-wrap;
                         }
                     }
@@ -917,19 +935,17 @@ export component MainWindow inherits Window {
             // ================================================================
             // СКРЫВАЕМЫЙ ВЫДВИЖНОЙ ДРАВЕР КОНСОЛИ (ДЛЯ ВКЛАДОК 0-3)
             // ================================================================
-            // В свернутом виде (console_open = false): только статус-бар внизу (32px)
-            // В развернутом виде (console_open = true): панель логов (160px)
             if root.active_tab != 4: Rectangle {
-                height: root.console_open ? 160px : 32px;
-                background: #0f1218;
-                border-radius: 8px;
+                height: root.console_open ? 160px : 30px;
+                background: #1c1c1c;
+                border-radius: 6px;
                 border-width: 1px;
-                border-color: #242c3d;
-                animate height { duration: 180ms; easing: ease-out; }
+                border-color: #2f2f2f;
+                animate height { duration: 160ms; easing: ease-out; }
 
                 VerticalLayout {
-                    padding-top: 6px;
-                    padding-bottom: 6px;
+                    padding-top: 4px;
+                    padding-bottom: 4px;
                     padding-left: 12px;
                     padding-right: 12px;
                     spacing: 6px;
@@ -942,16 +958,16 @@ export component MainWindow inherits Window {
                             spacing: 8px;
                             alignment: start;
                             Text {
-                                text: "💻 КОНСОЛЬ ВЫВОДА";
-                                font-size: 10px;
-                                font-weight: 800;
-                                color: #64748b;
+                                text: "Терминал вывода";
+                                font-size: 11px;
+                                font-weight: 600;
+                                color: #888888;
                                 vertical-alignment: center;
                             }
                             if !root.console_open: Text {
-                                text: "· Нажмите «Развернуть» для просмотра вывода операций";
-                                font-size: 10px;
-                                color: #475569;
+                                text: "· Нажмите «Показать лог» при необходимости";
+                                font-size: 11px;
+                                color: #555555;
                                 vertical-alignment: center;
                             }
                         }
@@ -962,17 +978,17 @@ export component MainWindow inherits Window {
 
                             WinButton {
                                 text: root.console_open ? "▼ Скрыть" : "▲ Развернуть";
-                                min_w: 90px;
+                                min_w: 80px;
                                 clicked => { root.console_open = !root.console_open; }
                             }
                             if root.console_open: WinButton {
-                                text: "Полноэкранный";
-                                min_w: 110px;
+                                text: "Полный экран";
+                                min_w: 95px;
                                 clicked => { root.active_tab = 4; }
                             }
                             if root.console_open: WinButton {
                                 text: "Очистить";
-                                min_w: 80px;
+                                min_w: 70px;
                                 clicked => { root.clear_log(); }
                             }
                         }
@@ -983,7 +999,7 @@ export component MainWindow inherits Window {
                             text: root.log_output;
                             font-family: "Cascadia Mono, Consolas";
                             font-size: 11px;
-                            color: #cbd5e1;
+                            color: #cccccc;
                             wrap: word-wrap;
                         }
                     }
