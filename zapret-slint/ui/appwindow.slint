@@ -7,13 +7,6 @@ component Card inherits Rectangle {
     border-color: #242c3d;
 }
 
-component SectionHeader inherits Text {
-    font-size: 11px;
-    font-weight: 800;
-    color: #8b9bb4;
-    letter-spacing: 0.5px;
-}
-
 component StatusBadge inherits Rectangle {
     in property <string> text: "";
     in property <color> badge_color: #3b82f6;
@@ -37,13 +30,126 @@ component StatusBadge inherits Rectangle {
     }
 }
 
+component NavItem inherits Rectangle {
+    in property <string> icon: "";
+    in property <string> text: "";
+    in property <bool> active: false;
+    callback clicked();
+
+    height: 38px;
+    border-radius: 6px;
+    background: root.active ? #1e293b : (touch.has-hover ? #172033 : transparent);
+
+    HorizontalLayout {
+        padding-left: 10px;
+        padding-right: 10px;
+        spacing: 10px;
+        alignment: start;
+
+        // Active indicator bar
+        Rectangle {
+            width: 3px;
+            height: 18px;
+            border-radius: 2px;
+            background: root.active ? #38bdf8 : transparent;
+            y: (parent.height - self.height) / 2;
+        }
+
+        Text {
+            text: root.icon;
+            font-size: 14px;
+            vertical-alignment: center;
+        }
+
+        Text {
+            text: root.text;
+            font-size: 13px;
+            font-weight: root.active ? 700 : 500;
+            color: root.active ? #ffffff : (touch.has-hover ? #f1f5f9 : #94a3b8);
+            vertical-alignment: center;
+        }
+    }
+
+    touch := TouchArea {
+        clicked => { root.clicked(); }
+    }
+}
+
+component SettingsCard inherits Rectangle {
+    in property <string> icon: "⚙️";
+    in property <string> title: "";
+    in property <string> description: "";
+
+    background: #161b26;
+    border-radius: 8px;
+    border-width: 1px;
+    border-color: #242c3d;
+    min-height: 58px;
+
+    HorizontalLayout {
+        padding-left: 14px;
+        padding-right: 14px;
+        padding-top: 10px;
+        padding-bottom: 10px;
+        spacing: 12px;
+        alignment: space-between;
+
+        HorizontalLayout {
+            spacing: 12px;
+            alignment: start;
+            horizontal-stretch: 1;
+
+            Rectangle {
+                width: 34px;
+                height: 34px;
+                border-radius: 7px;
+                background: #1e2638;
+                border-width: 1px;
+                border-color: #2e3a52;
+                y: (parent.height - self.height) / 2;
+
+                Text {
+                    text: root.icon;
+                    font-size: 15px;
+                    horizontal-alignment: center;
+                    vertical-alignment: center;
+                }
+            }
+
+            VerticalLayout {
+                spacing: 2px;
+                alignment: center;
+
+                Text {
+                    text: root.title;
+                    font-size: 13px;
+                    font-weight: 700;
+                    color: #ffffff;
+                }
+                Text {
+                    text: root.description;
+                    font-size: 11px;
+                    color: #8b9bb4;
+                    wrap: word-wrap;
+                }
+            }
+        }
+
+        HorizontalLayout {
+            alignment: end;
+            spacing: 8px;
+            @children
+        }
+    }
+}
+
 export component MainWindow inherits Window {
     title: "ZAPRET SIMPLE (Native Slint)";
     icon: @image-url("../assets/app.png");
-    min-width: 960px;
-    min-height: 720px;
-    preferred-width: 980px;
-    preferred-height: 760px;
+    min-width: 1000px;
+    min-height: 700px;
+    preferred-width: 1060px;
+    preferred-height: 740px;
     background: #0f1219;
     default-font-family: "Segoe UI";
 
@@ -68,6 +174,8 @@ export component MainWindow inherits Window {
 
     in property <string> log_output: "";
     in property <bool> is_running: false;
+
+    in-out property <int> active_tab: 0;
 
     callback toggle_service();
     callback remove_service();
@@ -95,397 +203,586 @@ export component MainWindow inherits Window {
     callback open_original_service();
     callback clear_log();
 
-    VerticalLayout {
-        padding: 14px;
-        spacing: 12px;
-
-        // ===== 1. ШАПКА =====
+    HorizontalLayout {
+        // ==========================================
+        // 1. ЛЕВЫЙ САЙДБАР (SIDEBAR)
+        // ==========================================
         Rectangle {
-            height: 58px;
-            background: #161b26;
-            border-radius: 8px;
+            width: 230px;
+            background: #131620;
             border-width: 1px;
-            border-color: #242c3d;
+            border-color: #1e2433;
 
-            HorizontalLayout {
-                padding-left: 18px;
-                padding-right: 18px;
-                alignment: space-between;
+            VerticalLayout {
+                padding: 12px;
+                spacing: 12px;
 
+                // Бренд и логотип
                 HorizontalLayout {
-                    spacing: 12px;
+                    spacing: 10px;
                     alignment: start;
-                    Text {
-                        text: "ZAPRET SIMPLE";
-                        font-size: 17px;
-                        font-weight: 800;
-                        color: #ffffff;
-                        vertical-alignment: center;
+
+                    Rectangle {
+                        width: 36px;
+                        height: 36px;
+                        border-radius: 8px;
+                        background: #2563eb;
+                        Text {
+                            text: "⚡";
+                            font-size: 18px;
+                            horizontal-alignment: center;
+                            vertical-alignment: center;
+                        }
                     }
+
+                    VerticalLayout {
+                        alignment: center;
+                        spacing: 1px;
+                        Text {
+                            text: "ZAPRET SIMPLE";
+                            font-size: 14px;
+                            font-weight: 800;
+                            color: #ffffff;
+                            letter-spacing: 0.5px;
+                        }
+                        Text {
+                            text: "WINDOWS DPI BYPASS";
+                            font-size: 9px;
+                            font-weight: 700;
+                            color: #60a5fa;
+                            letter-spacing: 0.5px;
+                        }
+                    }
+                }
+
+                // Бейджи версии и прав
+                HorizontalLayout {
+                    spacing: 6px;
+                    alignment: start;
                     StatusBadge {
                         text: root.zapret_version;
                         badge_color: #60a5fa;
-                        y: (parent.height - self.height) / 2;
                     }
                     StatusBadge {
                         text: root.admin_status;
                         badge_color: root.admin_color;
-                        y: (parent.height - self.height) / 2;
                     }
                 }
 
-                HorizontalLayout {
-                    spacing: 10px;
-                    alignment: end;
-                    Button {
-                        text: root.sound_enabled ? "🔊 Звук: Вкл" : "🔇 Звук: Выкл";
-                        clicked => { root.toggle_sound(); }
-                    }
-                    Rectangle {
-                        width: 10px;
-                        height: 10px;
-                        border-radius: 5px;
-                        background: root.status_color;
-                        y: (parent.height - self.height) / 2;
-                    }
-                    Text {
-                        text: root.service_status;
-                        font-size: 13px;
-                        font-weight: 700;
-                        color: root.status_color;
-                        vertical-alignment: center;
-                    }
-                }
-            }
-        }
+                // Карточка статуса службы
+                Rectangle {
+                    background: #181d2a;
+                    border-radius: 8px;
+                    border-width: 1px;
+                    border-color: #262f44;
 
-        // ===== 2. СЕТКА СЕКЦИЙ (SERVICE, SETTINGS, UPDATES, TOOLS) =====
-        HorizontalLayout {
-            spacing: 12px;
-
-            // --- Левая колонка: SERVICE + SETTINGS ---
-            VerticalLayout {
-                spacing: 12px;
-                horizontal-stretch: 1;
-
-                // Секция SERVICE
-                Card {
                     VerticalLayout {
-                        padding: 12px;
-                        spacing: 10px;
+                        padding: 10px;
+                        spacing: 8px;
 
-                        SectionHeader {
-                            text: ":: SERVICE (УПРАВЛЕНИЕ СЛУЖБОЙ)";
-                        }
-
-                        // Выбор стратегии
                         HorizontalLayout {
                             spacing: 8px;
-                            alignment: space-between;
+                            alignment: start;
+                            Rectangle {
+                                width: 9px;
+                                height: 9px;
+                                border-radius: 4px;
+                                background: root.status_color;
+                                y: (parent.height - self.height) / 2;
+                            }
                             Text {
-                                text: "Стратегия:";
+                                text: root.service_status;
                                 font-size: 12px;
-                                font-weight: 600;
-                                color: #c0c7d6;
+                                font-weight: 700;
+                                color: root.status_color;
                                 vertical-alignment: center;
                             }
-                            ComboBox {
-                                model: root.strategies;
-                                current-index <=> root.selected_strategy_index;
-                                width: 220px;
-                            }
-                            Button {
-                                text: "Применить";
-                                clicked => { root.apply_strategy(); }
-                            }
                         }
 
-                        // Кнопки управления службой
                         HorizontalLayout {
-                            spacing: 8px;
+                            spacing: 6px;
                             Button {
-                                text: root.is_running ? "⏹ Остановить" : "▶ Запустить";
+                                text: root.is_running ? "⏹ Стоп" : "▶ Пуск";
                                 primary: !root.is_running;
                                 clicked => { root.toggle_service(); }
                             }
                             Button {
-                                text: "Статус службы";
+                                text: "Инфо";
                                 clicked => { root.service_status_details(); }
                             }
-                            Button {
-                                text: "Удалить службу";
-                                clicked => { root.remove_service(); }
-                            }
                         }
                     }
                 }
 
-                // Секция SETTINGS
-                Card {
-                    VerticalLayout {
-                        padding: 12px;
-                        spacing: 10px;
-
-                        SectionHeader {
-                            text: ":: SETTINGS (НАСТРОЙКИ И ФИЛЬТРЫ)";
-                        }
-
-                        // Game Filter
-                        HorizontalLayout {
-                            alignment: space-between;
-                            Text {
-                                text: "Игровой фильтр (GameFilter):";
-                                font-size: 12px;
-                                color: #c0c7d6;
-                                vertical-alignment: center;
-                            }
-                            HorizontalLayout {
-                                spacing: 8px;
-                                StatusBadge {
-                                    text: root.game_filter_text;
-                                    badge_color: root.game_filter_text == "Отключен" ? #94a3b8 : #22c55e;
-                                    y: (parent.height - self.height) / 2;
-                                }
-                                Button {
-                                    text: "Сменить";
-                                    clicked => { root.toggle_game_filter(); }
-                                }
-                            }
-                        }
-
-                        // IPSet
-                        HorizontalLayout {
-                            alignment: space-between;
-                            Text {
-                                text: "Фильтр IPSet (ipset-all.txt):";
-                                font-size: 12px;
-                                color: #c0c7d6;
-                                vertical-alignment: center;
-                            }
-                            HorizontalLayout {
-                                spacing: 8px;
-                                StatusBadge {
-                                    text: root.ipset_text;
-                                    badge_color: root.ipset_active ? #22c55e : #ef4444;
-                                    y: (parent.height - self.height) / 2;
-                                }
-                                Button {
-                                    text: "Вкл / Выкл";
-                                    clicked => { root.toggle_ipset(); }
-                                }
-                            }
-                        }
-
-                        // Check Updates flag
-                        HorizontalLayout {
-                            alignment: space-between;
-                            Text {
-                                text: "Автопроверка обновлений:";
-                                font-size: 12px;
-                                color: #c0c7d6;
-                                vertical-alignment: center;
-                            }
-                            HorizontalLayout {
-                                spacing: 8px;
-                                StatusBadge {
-                                    text: root.check_updates_text;
-                                    badge_color: root.check_updates_text == "Включена" ? #22c55e : #94a3b8;
-                                    y: (parent.height - self.height) / 2;
-                                }
-                                Button {
-                                    text: "Переключить";
-                                    clicked => { root.toggle_check_updates(); }
-                                }
-                            }
-                        }
-
-                        // DNS over HTTPS (DoH)
-                        HorizontalLayout {
-                            alignment: space-between;
-                            Text {
-                                text: "DNS over HTTPS (DoH):";
-                                font-size: 12px;
-                                color: #c0c7d6;
-                                vertical-alignment: center;
-                            }
-                            HorizontalLayout {
-                                spacing: 8px;
-                                StatusBadge {
-                                    text: root.doh_provider_text;
-                                    badge_color: root.doh_active ? #22c55e : #94a3b8;
-                                    y: (parent.height - self.height) / 2;
-                                }
-                                Button {
-                                    text: "Сменить DoH";
-                                    clicked => { root.toggle_doh(); }
-                                }
-                            }
-                        }
-
-                        // Autostart with Windows
-                        HorizontalLayout {
-                            alignment: space-between;
-                            Text {
-                                text: "Автозагрузка с Windows:";
-                                font-size: 12px;
-                                color: #c0c7d6;
-                                vertical-alignment: center;
-                            }
-                            HorizontalLayout {
-                                spacing: 8px;
-                                StatusBadge {
-                                    text: root.autostart_text;
-                                    badge_color: root.autostart_active ? #22c55e : #94a3b8;
-                                    y: (parent.height - self.height) / 2;
-                                }
-                                Button {
-                                    text: "Переключить";
-                                    clicked => { root.toggle_autostart(); }
-                                }
-                            }
-                        }
-
-                        // Fakes
-                        HorizontalLayout {
-                            alignment: space-between;
-                            Text {
-                                text: "Fake payloads (*.bin):";
-                                font-size: 12px;
-                                color: #c0c7d6;
-                                vertical-alignment: center;
-                            }
-                            Button {
-                                text: "Список фейков в bin/";
-                                clicked => { root.inspect_fakes(); }
-                            }
-                        }
-                    }
+                // Разделитель
+                Rectangle {
+                    height: 1px;
+                    background: #1e2433;
                 }
-            }
 
-            // --- Правая колонка: UPDATES + TOOLS ---
-            VerticalLayout {
-                spacing: 12px;
-                horizontal-stretch: 1;
+                // Заголовок навигации
+                Text {
+                    text: "НАВИГАЦИЯ";
+                    font-size: 10px;
+                    font-weight: 800;
+                    color: #64748b;
+                    letter-spacing: 0.8px;
+                }
 
-                // Секция UPDATES
-                Card {
-                    VerticalLayout {
-                        padding: 12px;
-                        spacing: 10px;
-
-                        SectionHeader {
-                            text: ":: UPDATES (ОБНОВЛЕНИЯ)";
-                        }
-
-                        HorizontalLayout {
-                            spacing: 8px;
-                            Button {
-                                text: "🌐 Обновить IPSet";
-                                clicked => { root.update_ipset(); }
-                            }
-                            Button {
-                                text: "📄 Проверить Hosts";
-                                clicked => { root.check_hosts(); }
-                            }
-                            Button {
-                                text: "🚀 Проверить обновления";
-                                clicked => { root.check_updates(); }
-                            }
-                        }
+                // Список вкладок (Navigation items)
+                VerticalLayout {
+                    spacing: 4px;
+                    NavItem {
+                        icon: "🛡️";
+                        text: "Служба";
+                        active: root.active_tab == 0;
+                        clicked => { root.active_tab = 0; }
+                    }
+                    NavItem {
+                        icon: "⚙️";
+                        text: "Параметры";
+                        active: root.active_tab == 1;
+                        clicked => { root.active_tab = 1; }
+                    }
+                    NavItem {
+                        icon: "🔄";
+                        text: "Обновления";
+                        active: root.active_tab == 2;
+                        clicked => { root.active_tab = 2; }
+                    }
+                    NavItem {
+                        icon: "🛠️";
+                        text: "Инструменты";
+                        active: root.active_tab == 3;
+                        clicked => { root.active_tab = 3; }
+                    }
+                    NavItem {
+                        icon: "📋";
+                        text: "Журнал логов";
+                        active: root.active_tab == 4;
+                        clicked => { root.active_tab = 4; }
                     }
                 }
 
-                // Секция TOOLS
-                Card {
-                    VerticalLayout {
-                        padding: 12px;
-                        spacing: 10px;
+                // Пружина
+                Rectangle {
+                    vertical-stretch: 1;
+                }
 
-                        SectionHeader {
-                            text: ":: TOOLS (ИНСТРУМЕНТЫ И ДИАГНОСТИКА)";
-                        }
+                // Разделитель футера
+                Rectangle {
+                    height: 1px;
+                    background: #1e2433;
+                }
 
-                        HorizontalLayout {
-                            spacing: 8px;
-                            Button {
-                                text: "🔍 Полная диагностика (18 проверок)";
-                                primary: true;
-                                clicked => { root.run_diagnostics(); }
-                            }
-                            Button {
-                                text: "⚡ Тесты zapret.ps1";
-                                clicked => { root.run_tests(); }
-                            }
-                        }
-
-                        HorizontalLayout {
-                            spacing: 8px;
-                            Button {
-                                text: "🧹 Очистить кэш Discord";
-                                clicked => { root.clear_discord(); }
-                            }
-                            Button {
-                                text: "🛡 Устранить конфликты";
-                                clicked => { root.remove_conflicts(); }
-                            }
-                        }
-
-                        HorizontalLayout {
-                            spacing: 8px;
-                            Button {
-                                text: "⚙ Открыть оригинальный service.bat";
-                                clicked => { root.open_original_service(); }
-                            }
-                        }
-
-                        HorizontalLayout {
-                            spacing: 8px;
-                            Button {
-                                text: "📁 Выбрать папку zapret";
-                                clicked => { root.select_zapret_folder(); }
-                            }
-                            Button {
-                                text: "📦 Распаковать zapret.zip";
-                                clicked => { root.unpack_zapret_zip(); }
-                            }
-                        }
-                    }
+                // Футер сайдбара
+                Button {
+                    text: root.sound_enabled ? "🔊 Звуки: Вкл" : "🔇 Звуки: Выкл";
+                    clicked => { root.toggle_sound(); }
                 }
             }
         }
 
-        // ===== 3. ВЫВОД И ЖУРНАЛ (LOG) =====
-        Card {
-            vertical-stretch: 1;
-            background: #0d1017;
+        // ==========================================
+        // 2. ОСНОВНОЙ КОНТЕНТ (MAIN CONTENT AREA)
+        // ==========================================
+        VerticalLayout {
+            padding: 14px;
+            spacing: 12px;
+            horizontal-stretch: 1;
 
-            VerticalLayout {
-                padding: 10px;
-                spacing: 6px;
+            // Верхняя плашка текущего раздела
+            Rectangle {
+                height: 48px;
+                background: #161b26;
+                border-radius: 8px;
+                border-width: 1px;
+                border-color: #242c3d;
 
                 HorizontalLayout {
+                    padding-left: 16px;
+                    padding-right: 16px;
                     alignment: space-between;
+
                     Text {
-                        text: "ЖУРНАЛ СООБЩЕНИЙ И ВЫВОД ДИАГНОСТИКИ";
-                        font-size: 11px;
-                        font-weight: 800;
-                        color: #64748b;
+                        text: root.active_tab == 0 ? "🛡️ Управление службой и стратегиями" :
+                              root.active_tab == 1 ? "⚙️ Параметры и фильтрация трафика" :
+                              root.active_tab == 2 ? "🔄 Обновление списков и компонентов" :
+                              root.active_tab == 3 ? "🛠️ Системная диагностика и инструменты" :
+                                                     "📋 Журнал событий и консоль вывода";
+                        font-size: 15px;
+                        font-weight: 700;
+                        color: #ffffff;
                         vertical-alignment: center;
                     }
+
+                    // Быстрый выбор стратегии прямо в шапке для вкладки 0
+                    if root.active_tab == 0: HorizontalLayout {
+                        spacing: 8px;
+                        alignment: end;
+                        Text {
+                            text: "Стратегия:";
+                            font-size: 12px;
+                            font-weight: 600;
+                            color: #94a3b8;
+                            vertical-alignment: center;
+                        }
+                        ComboBox {
+                            model: root.strategies;
+                            current-index <=> root.selected_strategy_index;
+                            width: 200px;
+                        }
+                        Button {
+                            text: "Применить";
+                            primary: true;
+                            clicked => { root.apply_strategy(); }
+                        }
+                    }
+                }
+            }
+
+            // ВКЛАДКА 0: СЛУЖБА
+            if root.active_tab == 0: VerticalLayout {
+                spacing: 10px;
+
+                SettingsCard {
+                    icon: "🎯";
+                    title: "Выбор активной стратегии DPI";
+                    description: "Пресеты параметров winws для обхода замедлений YouTube, Discord и веб-сайтов";
+
+                    ComboBox {
+                        model: root.strategies;
+                        current-index <=> root.selected_strategy_index;
+                        width: 200px;
+                        y: (parent.height - self.height) / 2;
+                    }
                     Button {
-                        text: "Очистить журнал";
-                        clicked => { root.clear_log(); }
+                        text: "Применить";
+                        primary: true;
+                        clicked => { root.apply_strategy(); }
+                        y: (parent.height - self.height) / 2;
                     }
                 }
 
-                ScrollView {
-                    Text {
-                        text: root.log_output;
-                        font-family: "Consolas";
-                        font-size: 12px;
-                        color: #e2e8f0;
-                        wrap: word-wrap;
+                SettingsCard {
+                    icon: "🛡️";
+                    title: "Управление службой Windows";
+                    description: "Запуск, остановка и проверка состояния системного сервиса zapret";
+
+                    Button {
+                        text: root.is_running ? "⏹ Остановить службу" : "▶ Запустить службу";
+                        primary: !root.is_running;
+                        clicked => { root.toggle_service(); }
+                        y: (parent.height - self.height) / 2;
+                    }
+                    Button {
+                        text: "Подробный статус";
+                        clicked => { root.service_status_details(); }
+                        y: (parent.height - self.height) / 2;
+                    }
+                }
+
+                SettingsCard {
+                    icon: "⚙️";
+                    title: "Системные действия службы";
+                    description: "Удаление службы из реестра SCM или запуск оригинального скрипта";
+
+                    Button {
+                        text: "Оригинальный service.bat";
+                        clicked => { root.open_original_service(); }
+                        y: (parent.height - self.height) / 2;
+                    }
+                    Button {
+                        text: "Удалить службу";
+                        clicked => { root.remove_service(); }
+                        y: (parent.height - self.height) / 2;
+                    }
+                }
+            }
+
+            // ВКЛАДКА 1: ПАРАМЕТРЫ
+            if root.active_tab == 1: VerticalLayout {
+                spacing: 8px;
+
+                SettingsCard {
+                    icon: "🎮";
+                    title: "Игровой фильтр (GameFilter)";
+                    description: "Исключение игровых UDP портов и P2P трафика для предотвращения задержек";
+
+                    StatusBadge {
+                        text: root.game_filter_text;
+                        badge_color: root.game_filter_text == "Отключен" ? #94a3b8 : #22c55e;
+                        y: (parent.height - self.height) / 2;
+                    }
+                    Button {
+                        text: "Сменить";
+                        clicked => { root.toggle_game_filter(); }
+                        y: (parent.height - self.height) / 2;
+                    }
+                }
+
+                SettingsCard {
+                    icon: "🌐";
+                    title: "Фильтр IPSet (ipset-all.txt)";
+                    description: "Фильтрация DPI только для известных заблокированных IP адресов";
+
+                    StatusBadge {
+                        text: root.ipset_text;
+                        badge_color: root.ipset_active ? #22c55e : #ef4444;
+                        y: (parent.height - self.height) / 2;
+                    }
+                    Button {
+                        text: "Вкл / Выкл";
+                        clicked => { root.toggle_ipset(); }
+                        y: (parent.height - self.height) / 2;
+                    }
+                }
+
+                SettingsCard {
+                    icon: "🔒";
+                    title: "DNS over HTTPS (DoH)";
+                    description: "Шифрование DNS-запросов (Cloudflare, Google, AdGuard) для обхода перехвата";
+
+                    StatusBadge {
+                        text: root.doh_provider_text;
+                        badge_color: root.doh_active ? #22c55e : #94a3b8;
+                        y: (parent.height - self.height) / 2;
+                    }
+                    Button {
+                        text: "Сменить DoH";
+                        clicked => { root.toggle_doh(); }
+                        y: (parent.height - self.height) / 2;
+                    }
+                }
+
+                SettingsCard {
+                    icon: "🚀";
+                    title: "Автозагрузка с Windows";
+                    description: "Автоматический запуск zapret-simple при старте операционной системы";
+
+                    StatusBadge {
+                        text: root.autostart_text;
+                        badge_color: root.autostart_active ? #22c55e : #94a3b8;
+                        y: (parent.height - self.height) / 2;
+                    }
+                    Button {
+                        text: "Переключить";
+                        clicked => { root.toggle_autostart(); }
+                        y: (parent.height - self.height) / 2;
+                    }
+                }
+
+                SettingsCard {
+                    icon: "🔄";
+                    title: "Автопроверка обновлений";
+                    description: "Автоматический запрос новых версий zapret на GitHub при запуске программы";
+
+                    StatusBadge {
+                        text: root.check_updates_text;
+                        badge_color: root.check_updates_text == "Включена" ? #22c55e : #94a3b8;
+                        y: (parent.height - self.height) / 2;
+                    }
+                    Button {
+                        text: "Переключить";
+                        clicked => { root.toggle_check_updates(); }
+                        y: (parent.height - self.height) / 2;
+                    }
+                }
+
+                SettingsCard {
+                    icon: "📦";
+                    title: "Fake Payloads (*.bin)";
+                    description: "Просмотр установленных бинарных фейковых пакетов в папке zapret/bin/";
+
+                    Button {
+                        text: "Список фейков в bin/";
+                        clicked => { root.inspect_fakes(); }
+                        y: (parent.height - self.height) / 2;
+                    }
+                }
+            }
+
+            // ВКЛАДКА 2: ОБНОВЛЕНИЯ
+            if root.active_tab == 2: VerticalLayout {
+                spacing: 10px;
+
+                SettingsCard {
+                    icon: "🌐";
+                    title: "Обновление базы IPSet";
+                    description: "Загрузить свежий список ipset-service.txt из репозитория Flowseal";
+
+                    Button {
+                        text: "Обновить IPSet";
+                        primary: true;
+                        clicked => { root.update_ipset(); }
+                        y: (parent.height - self.height) / 2;
+                    }
+                }
+
+                SettingsCard {
+                    icon: "📄";
+                    title: "Проверка системного файла Hosts";
+                    description: "Анализ файла hosts на наличие записей, блокирующих сервисы";
+
+                    Button {
+                        text: "Проверить Hosts";
+                        clicked => { root.check_hosts(); }
+                        y: (parent.height - self.height) / 2;
+                    }
+                }
+
+                SettingsCard {
+                    icon: "🚀";
+                    title: "Проверка обновлений zapret";
+                    description: "Сравнение текущей локальной версии с последним релизом на GitHub";
+
+                    Button {
+                        text: "Проверить обновления";
+                        clicked => { root.check_updates(); }
+                        y: (parent.height - self.height) / 2;
+                    }
+                }
+            }
+
+            // ВКЛАДКА 3: ИНСТРУМЕНТЫ
+            if root.active_tab == 3: VerticalLayout {
+                spacing: 8px;
+
+                SettingsCard {
+                    icon: "🔍";
+                    title: "Комплексная диагностика (18 проверок)";
+                    description: "Глубокая проверка WinDivert, сетевых адаптеров, DNS, портов и фильтров";
+
+                    Button {
+                        text: "Запустить диагностику";
+                        primary: true;
+                        clicked => { root.run_diagnostics(); }
+                        y: (parent.height - self.height) / 2;
+                    }
+                }
+
+                SettingsCard {
+                    icon: "⚡";
+                    title: "Тестирование и конфликты";
+                    description: "Запуск тестового скрипта zapret.ps1 и нейтрализация конфликтующих служб";
+
+                    Button {
+                        text: "Тесты zapret.ps1";
+                        clicked => { root.run_tests(); }
+                        y: (parent.height - self.height) / 2;
+                    }
+                    Button {
+                        text: "Устранить конфликты";
+                        clicked => { root.remove_conflicts(); }
+                        y: (parent.height - self.height) / 2;
+                    }
+                }
+
+                SettingsCard {
+                    icon: "🧹";
+                    title: "Очистка кэша Discord";
+                    description: "Завершение зависших процессов Discord и удаление временных файлов кэша";
+
+                    Button {
+                        text: "Очистить кэш Discord";
+                        clicked => { root.clear_discord(); }
+                        y: (parent.height - self.height) / 2;
+                    }
+                }
+
+                SettingsCard {
+                    icon: "📁";
+                    title: "Управление файлами zapret";
+                    description: "Ручной выбор рабочей папки или распаковка дистрибутива из ZIP архива";
+
+                    Button {
+                        text: "Выбрать папку zapret";
+                        clicked => { root.select_zapret_folder(); }
+                        y: (parent.height - self.height) / 2;
+                    }
+                    Button {
+                        text: "Распаковать zapret.zip";
+                        clicked => { root.unpack_zapret_zip(); }
+                        y: (parent.height - self.height) / 2;
+                    }
+                }
+            }
+
+            // ВКЛАДКА 4: ПОЛНОРАЗМЕРНЫЙ ЖУРНАЛ ЛОГОВ
+            if root.active_tab == 4: Card {
+                vertical-stretch: 1;
+                background: #0d1017;
+
+                VerticalLayout {
+                    padding: 12px;
+                    spacing: 8px;
+
+                    HorizontalLayout {
+                        alignment: space-between;
+                        Text {
+                            text: "ЖУРНАЛ СООБЩЕНИЙ И ВЫВОД ДИАГНОСТИКИ";
+                            font-size: 11px;
+                            font-weight: 800;
+                            color: #64748b;
+                            vertical-alignment: center;
+                        }
+                        Button {
+                            text: "Очистить журнал";
+                            clicked => { root.clear_log(); }
+                        }
+                    }
+
+                    ScrollView {
+                        Text {
+                            text: root.log_output;
+                            font-family: "Consolas";
+                            font-size: 12px;
+                            color: #e2e8f0;
+                            wrap: word-wrap;
+                        }
+                    }
+                }
+            }
+
+            // ДЛЯ ВКЛАДОК 0-3: КОМПАКТНЫЙ ВЫДВИЖНОЙ ДРАВЕР ЛОГОВ ВНИЗУ
+            if root.active_tab != 4: Card {
+                height: 150px;
+                background: #0d1017;
+
+                VerticalLayout {
+                    padding: 10px;
+                    spacing: 6px;
+
+                    HorizontalLayout {
+                        alignment: space-between;
+                        Text {
+                            text: "КОНСОЛЬ ВЫВОДА";
+                            font-size: 10px;
+                            font-weight: 800;
+                            color: #64748b;
+                            vertical-alignment: center;
+                        }
+                        HorizontalLayout {
+                            spacing: 6px;
+                            Button {
+                                text: "На весь экран";
+                                clicked => { root.active_tab = 4; }
+                            }
+                            Button {
+                                text: "Очистить";
+                                clicked => { root.clear_log(); }
+                            }
+                        }
+                    }
+
+                    ScrollView {
+                        Text {
+                            text: root.log_output;
+                            font-family: "Consolas";
+                            font-size: 11px;
+                            color: #cbd5e1;
+                            wrap: word-wrap;
+                        }
                     }
                 }
             }
