@@ -1467,7 +1467,7 @@ export component MainWindow inherits Window {
                                             color: #60cdff;
                                         }
                                         Text {
-                                            text: "Высокопроизводительный нативный клиент для обхода замедлений YouTube и Discord на Windows";
+                                            text: "Высокопроизводительный нативный инструмент для сетевой диагностики и оптимизации TCP/UDP пакетов на Windows";
                                             font-size: 11px;
                                             color: Theme.text_muted;
                                         }
@@ -1535,13 +1535,19 @@ export component MainWindow inherits Window {
                                     spacing: 8px;
 
                                     WinButton {
-                                        text: "GitHub Flowseal";
-                                        min_w: 120px;
-                                        clicked => { root.open_url("https://github.com/Flowseal/zapret-discord-youtube"); }
+                                        text: "GitHub zapret-rs";
+                                        primary: true;
+                                        min_w: 130px;
+                                        clicked => { root.open_url("https://github.com/skllfi2/zapret-rs"); }
                                     }
                                     WinButton {
-                                        text: "Оригинальный zapret (bol-van)";
-                                        min_w: 180px;
+                                        text: "Правовая информация (Disclaimer)";
+                                        min_w: 220px;
+                                        clicked => { root.open_url("https://github.com/skllfi2/zapret-rs/blob/master/DISCLAIMER.md"); }
+                                    }
+                                    WinButton {
+                                        text: "Оригинал bol-van";
+                                        min_w: 130px;
                                         clicked => { root.open_url("https://github.com/bol-van/zapret"); }
                                     }
                                 }
