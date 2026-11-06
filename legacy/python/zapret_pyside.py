@@ -1,5 +1,7 @@
 #!/usr/bin/env python3
-# zapret_pyside — десктопный UI на PySide6 (Qt 6) для zapret-simple
+# [LEGACY] zapret_pyside — десктопный UI на PySide6 (Qt 6) для zapret-simple.
+# ПРИМЕЧАНИЕ: Этот модуль переведён в статус LEGACY / DEPRECATED.
+# Основной и активно развиваемой версией является нативный клиент на Slint + Rust: zapret-slint!
 # Структура меню — как в оригинальном service.bat (ZAPRET SERVICE MANAGER v<LOCAL_VERSION>):
 # секции :: SERVICE / :: SETTINGS / :: UPDATES / :: TOOLS, статусы в квадратных скобках.
 # Тёмная тема ZuiV2, вывод с цветами PrintGreen/PrintYellow/PrintRed.
