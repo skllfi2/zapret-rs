@@ -19,12 +19,13 @@ impl ZapretPaths {
             candidates.push(PathBuf::from(val));
         }
 
-        // 2. Портативный режим: папка прямо рядом с zapret-rs.exe или подпапка zapret/
+        // 2. Портативный режим: подпапка engine/ или zapret/ или сама папка рядом с zapret-rs.exe
         if let Ok(exe) = env::current_exe()
             && let Some(parent) = exe.parent()
         {
-            candidates.push(parent.to_path_buf());
+            candidates.push(parent.join("engine"));
             candidates.push(parent.join("zapret"));
+            candidates.push(parent.to_path_buf());
         }
 
         // 3. Saved user path from ui_settings.json
