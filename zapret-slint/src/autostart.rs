@@ -3,15 +3,14 @@ use winreg::enums::*;
 use winreg::RegKey;
 
 const RUN_KEY: &str = r"Software\Microsoft\Windows\CurrentVersion\Run";
-const APP_NAME: &str = "zapret-simple";
+const APP_NAME: &str = "zapret-rs";
 
 pub fn is_autostart_enabled() -> bool {
     let hkcu = RegKey::predef(HKEY_CURRENT_USER);
-    if let Ok(key) = hkcu.open_subkey_with_flags(RUN_KEY, KEY_READ) {
-        if let Ok(val) = key.get_value::<String, _>(APP_NAME) {
+    if let Ok(key) = hkcu.open_subkey_with_flags(RUN_KEY, KEY_READ)
+        && let Ok(val) = key.get_value::<String, _>(APP_NAME) {
             return !val.is_empty();
         }
-    }
     false
 }
 

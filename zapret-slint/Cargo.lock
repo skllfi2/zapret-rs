@@ -5646,8 +5646,8 @@ dependencies = [
 ]
 
 [[package]]
-name = "zapret-slint"
-version = "0.1.0"
+name = "zapret-rs"
+version = "0.1.0-alpha.1"
 dependencies = [
  "regex",
  "serde",

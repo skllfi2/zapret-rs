@@ -54,14 +54,12 @@ pub fn read_game_filter(orig_dir: &Path) -> GameFilterMode {
     GameFilterMode::Disabled
 }
 
-pub fn cycle_game_filter(orig_dir: &Path) -> Result<GameFilterMode, std::io::Error> {
-    let current = read_game_filter(orig_dir);
-    let next = current.next();
+pub fn set_game_filter_mode(orig_dir: &Path, mode: GameFilterMode) -> Result<(), std::io::Error> {
     let utils_dir = orig_dir.join("utils");
     fs::create_dir_all(&utils_dir)?;
     let path = utils_dir.join("game_filter.enabled");
 
-    let mode_str = match next {
+    let mode_str = match mode {
         GameFilterMode::Disabled => "disabled",
         GameFilterMode::Tcp => "tcp",
         GameFilterMode::Udp => "udp",
@@ -69,6 +67,13 @@ pub fn cycle_game_filter(orig_dir: &Path) -> Result<GameFilterMode, std::io::Err
     };
     let content = format!("mode={mode_str}\ntcp=1024-65535\nudp=1024-65535\n");
     fs::write(path, content)?;
+    Ok(())
+}
+
+pub fn cycle_game_filter(orig_dir: &Path) -> Result<GameFilterMode, std::io::Error> {
+    let current = read_game_filter(orig_dir);
+    let next = current.next();
+    set_game_filter_mode(orig_dir, next)?;
     Ok(next)
 }
 

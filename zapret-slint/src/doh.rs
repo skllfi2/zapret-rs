@@ -121,11 +121,10 @@ pub fn get_doh_status() -> DohStatus {
     if let Ok(k) = hklm.open_subkey_with_flags(
         r"SYSTEM\CurrentControlSet\Services\Dnscache\Parameters",
         KEY_READ,
-    ) {
-        if let Ok(val) = k.get_value::<u32, _>("EnableAutoDoh") {
+    )
+        && let Ok(val) = k.get_value::<u32, _>("EnableAutoDoh") {
             autodoh = val == 1 || val == 2;
         }
-    }
 
     let mut detected_provider = "disabled".to_string();
     let mut provider_name = "Отключен (DHCP)".to_string();

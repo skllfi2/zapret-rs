@@ -19,32 +19,61 @@ impl ZapretPaths {
             candidates.push(PathBuf::from(val));
         }
 
-        // 2. Saved user path from ui_settings.json
-        if let Ok(local_app_data) = env::var("LOCALAPPDATA") {
-            let settings_file = PathBuf::from(&local_app_data)
-                .join("zapret-simple")
-                .join("ui_settings.json");
-            if settings_file.is_file() {
-                if let Ok(content) = fs::read_to_string(&settings_file) {
-                    if let Ok(val) = serde_json::from_str::<serde_json::Value>(&content) {
-                        if let Some(p) = val.get("zapret_dir").and_then(|v| v.as_str()) {
-                            candidates.push(PathBuf::from(p));
-                        }
-                    }
-                }
-            }
+        // 2. Портативный режим: папка прямо рядом с zapret-rs.exe или подпапка zapret/
+        if let Ok(exe) = env::current_exe()
+            && let Some(parent) = exe.parent()
+        {
+            candidates.push(parent.to_path_buf());
+            candidates.push(parent.join("zapret"));
         }
 
-        // 3. Local relative ./zapret/ or current exe dir
-        if let Ok(exe) = env::current_exe() {
-            if let Some(parent) = exe.parent() {
+        // 3. Saved user path from ui_settings.json
+        if let Ok(local_app_data) = env::var("LOCALAPPDATA") {
+            let settings_file = PathBuf::from(&local_app_data)
+                .join("zapret-rs")
+                .join("ui_settings.json");
+            let legacy_settings_file = PathBuf::from(&local_app_data)
+                .join("zapret-simple")
+                .join("ui_settings.json");
+            let target_settings = if settings_file.is_file() {
+                settings_file
+            } else {
+                legacy_settings_file
+            };
+            if target_settings.is_file()
+                && let Ok(content) = fs::read_to_string(&target_settings)
+                && let Ok(val) = serde_json::from_str::<serde_json::Value>(&content)
+                && let Some(p) = val.get("zapret_dir").and_then(|v| v.as_str()) {
+                    candidates.push(PathBuf::from(p));
+                }
+        }
+
+        // 4. Active Windows service ImagePath directory (внешний zapret в системе)
+        let hklm = winreg::RegKey::predef(winreg::enums::HKEY_LOCAL_MACHINE);
+        if let Ok(svc_key) = hklm.open_subkey(r"System\CurrentControlSet\Services\zapret")
+            && let Ok(image_path) = svc_key.get_value::<String, _>("ImagePath") {
+                let clean = image_path.trim_matches('"');
+                if let Some(exe_idx) = clean.to_lowercase().find("winws.exe") {
+                    let exe_sub = &clean[..exe_idx + "winws.exe".len()];
+                    let p = PathBuf::from(exe_sub);
+                    if let Some(bin_dir) = p.parent()
+                        && let Some(orig_dir) = bin_dir.parent() {
+                            candidates.push(orig_dir.to_path_buf());
+                        }
+                }
+            }
+
+        // 5. Local relative ./zapret/ or current exe dir
+        if let Ok(exe) = env::current_exe()
+            && let Some(parent) = exe.parent() {
                 candidates.push(parent.join("zapret"));
                 candidates.push(parent.to_path_buf());
             }
-        }
 
-        // 4. %LOCALAPPDATA%\zapret-simple\zapret or AppWatch
+        // 6. %LOCALAPPDATA%\zapret-rs\engine or legacy zapret-simple\zapret
         if let Ok(local_app_data) = env::var("LOCALAPPDATA") {
+            candidates.push(PathBuf::from(&local_app_data).join("zapret-rs").join("engine"));
+            candidates.push(PathBuf::from(&local_app_data).join("zapret-rs").join("zapret"));
             candidates.push(PathBuf::from(&local_app_data).join("zapret-simple").join("zapret"));
             candidates.push(PathBuf::from(&local_app_data).join("AppWatch").join("Apps").join("zapret-discord-youtube"));
         }
@@ -70,25 +99,62 @@ impl ZapretPaths {
     }
 
     pub fn local_version(&self) -> String {
-        if self.service_bat.is_file() {
-            if let Ok(content) = fs::read_to_string(&self.service_bat) {
-                if let Ok(re) = regex::Regex::new(r#"set\s+"LOCAL_VERSION=([^"]+)""#) {
-                    if let Some(caps) = re.captures(&content) {
-                        if let Some(m) = caps.get(1) {
+        if self.service_bat.is_file()
+            && let Ok(content) = fs::read_to_string(&self.service_bat)
+                && let Ok(re) = regex::Regex::new(r#"set\s+"LOCAL_VERSION=([^"]+)""#)
+                    && let Some(caps) = re.captures(&content)
+                        && let Some(m) = caps.get(1) {
                             return format!("v{}", m.as_str().trim());
                         }
-                    }
-                }
-            }
-        }
         let ver_file = self.orig_dir.join("version.txt");
-        if ver_file.is_file() {
-            if let Ok(content) = fs::read_to_string(&ver_file) {
+        if ver_file.is_file()
+            && let Ok(content) = fs::read_to_string(&ver_file) {
                 return format!("v{}", content.trim());
             }
-        }
         "v?".to_string()
     }
+}
+
+pub fn get_internal_zapret_dir() -> Option<PathBuf> {
+    env::var("LOCALAPPDATA")
+        .ok()
+        .map(|app_data| PathBuf::from(app_data).join("zapret-rs").join("engine"))
+}
+
+/// Выполняет миграцию (копирование) файлов из внешнего каталога zapret в постоянное хранилище
+/// приложения %LOCALAPPDATA%\zapret-rs\engine.
+pub fn migrate_to_internal_storage(source_dir: &std::path::Path) -> Result<PathBuf, String> {
+    let target = get_internal_zapret_dir()
+        .ok_or_else(|| "Не удалось определить LOCALAPPDATA".to_string())?;
+
+    if !source_dir.is_dir() {
+        return Err(format!("Исходный каталог не существует: {}", source_dir.display()));
+    }
+
+    if source_dir == target {
+        return Ok(target);
+    }
+
+    let _ = fs::create_dir_all(&target);
+
+    // Используем robocopy для надежного рекурсивного копирования всех поддиректорий
+    let src_str = source_dir.to_string_lossy().trim_end_matches('\\').to_string();
+    let tgt_str = target.to_string_lossy().trim_end_matches('\\').to_string();
+
+    let output = std::process::Command::new("robocopy")
+        .args([&src_str, &tgt_str, "/E", "/NFL", "/NDL", "/NJH", "/NJS", "/nc", "/ns"])
+        .output();
+
+    if let Ok(res) = output {
+        // Robocopy return codes 0..7 mean success / files copied
+        if res.status.code().unwrap_or(0) <= 7
+            && target.join("bin").join("winws.exe").is_file() {
+                let _ = save_custom_zapret_dir(&target);
+                return Ok(target);
+            }
+    }
+
+    Err(format!("Не удалось скопировать zapret из {} в {}", source_dir.display(), target.display()))
 }
 
 pub fn save_custom_zapret_dir(dir: &std::path::Path) -> Result<(), String> {
@@ -101,7 +167,7 @@ pub fn save_custom_zapret_dir(dir: &std::path::Path) -> Result<(), String> {
     }
 
     if let Ok(local_app_data) = env::var("LOCALAPPDATA") {
-        let dir_path = PathBuf::from(&local_app_data).join("zapret-simple");
+        let dir_path = PathBuf::from(&local_app_data).join("zapret-rs");
         let _ = fs::create_dir_all(&dir_path);
         let settings_file = dir_path.join("ui_settings.json");
 

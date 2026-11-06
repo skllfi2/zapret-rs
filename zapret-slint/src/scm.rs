@@ -1,12 +1,16 @@
+use std::thread;
+use std::time::Duration;
 use windows::core::{w, PCWSTR};
 use windows::Win32::System::Services::{
-    CloseServiceHandle, ControlService, DeleteService, OpenSCManagerW, OpenServiceW,
-    QueryServiceStatus, StartServiceW, SC_HANDLE, SC_MANAGER_CONNECT, SERVICE_CONTROL_STOP,
-    SERVICE_QUERY_STATUS, SERVICE_RUNNING, SERVICE_START, SERVICE_STATUS, SERVICE_STOP,
-    SERVICE_STOPPED,
+    ChangeServiceConfigW, CloseServiceHandle, ControlService, CreateServiceW, DeleteService,
+    OpenSCManagerW, OpenServiceW, QueryServiceStatus, StartServiceW, SC_HANDLE, SC_MANAGER_ALL_ACCESS,
+    SC_MANAGER_CONNECT, SERVICE_ALL_ACCESS, SERVICE_AUTO_START, SERVICE_CONTROL_STOP,
+    SERVICE_ERROR_NORMAL, SERVICE_QUERY_STATUS, SERVICE_RUNNING, SERVICE_START, SERVICE_STATUS,
+    SERVICE_STOP, SERVICE_STOPPED, SERVICE_WIN32_OWN_PROCESS,
 };
 
 pub const SERVICE_NAME: windows::core::PCWSTR = w!("zapret");
+pub const SERVICE_DISPLAY: windows::core::PCWSTR = w!("zapret");
 
 struct AutoHandle(SC_HANDLE);
 
@@ -90,6 +94,7 @@ pub fn start_service() -> Result<(), String> {
     }
 }
 
+/// Останавливает службу и ждёт перехода в статус SERVICE_STOPPED (до 10 секунд).
 pub fn stop_service() -> Result<(), String> {
     unsafe {
         let scm = AutoHandle(
@@ -98,13 +103,25 @@ pub fn stop_service() -> Result<(), String> {
         );
 
         let service = AutoHandle(
-            OpenServiceW(scm.0, SERVICE_NAME, SERVICE_STOP)
+            OpenServiceW(scm.0, SERVICE_NAME, SERVICE_STOP | SERVICE_QUERY_STATUS)
                 .map_err(|e| format!("Служба zapret не найдена: {e}"))?,
         );
 
         let mut status = SERVICE_STATUS::default();
-        ControlService(service.0, SERVICE_CONTROL_STOP, &mut status)
-            .map_err(|e| format!("Не удалось остановить службу: {e}"))?;
+        let _ = ControlService(service.0, SERVICE_CONTROL_STOP, &mut status);
+
+        for _ in 0..20 {
+            let mut current_status = SERVICE_STATUS::default();
+            if QueryServiceStatus(service.0, &mut current_status).is_ok() {
+                if current_status.dwCurrentState == SERVICE_STOPPED {
+                    return Ok(());
+                }
+            } else {
+                return Ok(());
+            }
+            thread::sleep(Duration::from_millis(500));
+        }
+
         Ok(())
     }
 }
@@ -123,7 +140,7 @@ pub fn delete_service_named(name: &str) -> Result<(), String> {
                 PCWSTR(wide.as_ptr()),
                 windows::Win32::System::Services::SERVICE_ALL_ACCESS,
             )
-            .map_err(|e| format!("Служба {name} не найдена: {e}"))?,
+                .map_err(|e| format!("Служба {name} не найдена: {e}"))?,
         );
 
         let mut status = SERVICE_STATUS::default();
@@ -131,5 +148,65 @@ pub fn delete_service_named(name: &str) -> Result<(), String> {
 
         DeleteService(service.0)
             .map_err(|e| format!("Не удалось удалить службу {name}: {e}"))
+    }
+}
+
+/// Устанавливает или обновляет конфигурацию службы zapret с указанным binPath (exe + args).
+/// Если служба уже есть — обновляет через ChangeServiceConfigW.
+/// Если службы нет — создаёт через CreateServiceW со стартом SERVICE_AUTO_START.
+pub fn install_or_update_service(exe_path: &str, exe_args: &str) -> Result<(), String> {
+    let bin_path_full = format!("\"{exe_path}\" {exe_args}");
+    let bin_path_wide: Vec<u16> = bin_path_full.encode_utf16().chain(std::iter::once(0)).collect();
+
+    unsafe {
+        let scm = AutoHandle(
+            OpenSCManagerW(None, None, SC_MANAGER_ALL_ACCESS)
+                .map_err(|e| format!("Не удалось открыть SCM с полным доступом (нужен запуск от Администратора): {e}"))?,
+        );
+
+        // Проверяем, существует ли уже служба
+        if let Ok(svc_h) = OpenServiceW(scm.0, SERVICE_NAME, SERVICE_ALL_ACCESS) {
+            let service = AutoHandle(svc_h);
+            ChangeServiceConfigW(
+                service.0,
+                SERVICE_WIN32_OWN_PROCESS,
+                SERVICE_AUTO_START,
+                SERVICE_ERROR_NORMAL,
+                PCWSTR(bin_path_wide.as_ptr()),
+                PCWSTR::null(),
+                None,
+                PCWSTR::null(),
+                PCWSTR::null(),
+                PCWSTR::null(),
+                PCWSTR::null(),
+            )
+            .map_err(|e| format!("Не удалось обновить параметры службы в SCM: {e}"))?;
+            Ok(())
+        } else {
+            // Создаём новую службу
+            let created = CreateServiceW(
+                scm.0,
+                SERVICE_NAME,
+                SERVICE_DISPLAY,
+                SERVICE_ALL_ACCESS,
+                SERVICE_WIN32_OWN_PROCESS,
+                SERVICE_AUTO_START,
+                SERVICE_ERROR_NORMAL,
+                PCWSTR(bin_path_wide.as_ptr()),
+                PCWSTR::null(),
+                None,
+                PCWSTR::null(),
+                PCWSTR::null(),
+                PCWSTR::null(),
+            );
+
+            match created {
+                Ok(h) => {
+                    let _ = AutoHandle(h);
+                    Ok(())
+                }
+                Err(e) => Err(format!("Не удалось создать службу zapret: {e}")),
+            }
+        }
     }
 }

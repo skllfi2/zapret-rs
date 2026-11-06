@@ -16,6 +16,7 @@ pub enum DiagLevel {
 }
 
 impl DiagLevel {
+    #[allow(dead_code)]
     pub fn tag(&self) -> &'static str {
         match self {
             DiagLevel::Ok => "[+]",
@@ -43,11 +44,16 @@ impl DiagReport {
         let mut out = String::new();
         out.push_str("================ ДИАГНОСТИКА СИСТЕМЫ (18 проверок) ================\n\n");
         for item in &self.items {
-            out.push_str(&format!("{:<4} {:<24} : {}\n", item.level.tag(), item.name, item.msg));
+            let symbol = match item.level {
+                DiagLevel::Ok => "✅",
+                DiagLevel::Warn => "⚠️",
+                DiagLevel::Bad => "❌",
+            };
+            out.push_str(&format!("{}  {:<26} : {}\n", symbol, item.name, item.msg));
         }
         out.push_str("\n--------------------------------------------------------------------\n");
         out.push_str(&format!(
-            "ИТОГ: Всего: {} | Успешно [+]: {} | Внимание [?]: {} | Ошибок [X]: {}\n",
+            "ИТОГ: Всего: {}  |  Успешно ✅: {}  |  Внимание ⚠️: {}  |  Ошибок ❌: {}\n",
             self.items.len(),
             self.ok_count,
             self.warn_count,
@@ -283,12 +289,11 @@ pub fn run_full_diagnostics(orig_dir: &Path) -> DiagReport {
     let mut sys_found = false;
     if let Ok(entries) = fs::read_dir(&bin_dir) {
         for entry in entries.flatten() {
-            if let Some(ext) = entry.path().extension() {
-                if ext.to_string_lossy().eq_ignore_ascii_case("sys") {
+            if let Some(ext) = entry.path().extension()
+                && ext.to_string_lossy().eq_ignore_ascii_case("sys") {
                     sys_found = true;
                     break;
                 }
-            }
         }
     }
     if sys_found {
@@ -324,13 +329,61 @@ pub fn run_full_diagnostics(orig_dir: &Path) -> DiagReport {
     }
 
     // 14. DoH (DNS over HTTPS)
+    // В Windows 11 настройки DoH адаптера хранятся в:
+    // HKLM\SYSTEM\CurrentControlSet\Services\Dnscache\InterfaceSpecificParameters\{GUID}\DohInterfaceSettings\Doh\...
+    // с параметром DohFlags (REG_QWORD или REG_DWORD > 0).
     let hklm = RegKey::predef(HKEY_LOCAL_MACHINE);
-    let doh_found = if let Ok(sub) = hklm.open_subkey("SYSTEM\\CurrentControlSet\\Services\\Dnscache\\Parameters") {
-        let flags: u32 = sub.get_value("DohFlags").unwrap_or(0);
-        flags > 0
-    } else {
-        false
-    };
+    let mut doh_found = false;
+
+    // 14a. Проверка глобального флага
+    if let Ok(sub) = hklm.open_subkey("SYSTEM\\CurrentControlSet\\Services\\Dnscache\\Parameters") {
+        if let Ok(flags) = sub.get_value::<u32, _>("DohFlags")
+            && flags > 0 {
+                doh_found = true;
+            }
+        if let Ok(flags) = sub.get_value::<u32, _>("EnableAutoDoh")
+            && flags > 0 {
+                doh_found = true;
+            }
+    }
+
+    // 14b. Рекурсивный поиск DohFlags в InterfaceSpecificParameters (Windows 11)
+    if !doh_found
+        && let Ok(base) = hklm.open_subkey("SYSTEM\\CurrentControlSet\\Services\\Dnscache\\InterfaceSpecificParameters") {
+            let mut stack = vec![base];
+            let mut steps = 0;
+            while let Some(current_key) = stack.pop() {
+                steps += 1;
+                if steps > 500 {
+                    break;
+                }
+
+                // Проверяем наличие DohFlags в текущем ключе
+                if let Ok(val) = current_key.get_value::<u64, _>("DohFlags") {
+                    if val > 0 {
+                        doh_found = true;
+                        break;
+                    }
+                } else if let Ok(val) = current_key.get_value::<u32, _>("DohFlags")
+                    && val > 0 {
+                        doh_found = true;
+                        break;
+                    }
+
+                // Обходим подключи
+                for sub_name in current_key.enum_keys().flatten() {
+                    if let Ok(sub_key) = current_key.open_subkey(&sub_name) {
+                        stack.push(sub_key);
+                    }
+                }
+            }
+        }
+
+    // 14c. Fallback на doh::get_doh_status
+    if !doh_found {
+        doh_found = crate::doh::get_doh_status().enabled;
+    }
+
     if doh_found {
         items.push(DiagItem {
             name: "Secure DNS (DoH)",

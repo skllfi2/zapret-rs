@@ -28,6 +28,7 @@ htmlcov/
 target/
 zapret-slint/target/
 **/*.rs.bk
+release-v*/
 
 # Local unpacked zapret
 zapret/

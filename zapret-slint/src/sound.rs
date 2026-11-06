@@ -13,25 +13,26 @@ const SND_NODEFAULT: u32 = 0x0002;
 const SND_FILENAME: u32 = 0x00020000;
 
 fn settings_path() -> Option<PathBuf> {
-    env::var("LOCALAPPDATA").ok().map(|appdata| {
-        PathBuf::from(appdata)
-            .join("zapret-simple")
-            .join("ui_settings.json")
-    })
+    let local = env::var("LOCALAPPDATA").ok()?;
+    let path = PathBuf::from(&local).join("zapret-rs").join("ui_settings.json");
+    if path.is_file() {
+        return Some(path);
+    }
+    let legacy = PathBuf::from(&local).join("zapret-simple").join("ui_settings.json");
+    if legacy.is_file() {
+        return Some(legacy);
+    }
+    Some(path)
 }
 
 pub fn is_sound_enabled() -> bool {
-    if let Some(path) = settings_path() {
-        if path.is_file() {
-            if let Ok(content) = fs::read_to_string(&path) {
-                if let Ok(val) = serde_json::from_str::<serde_json::Value>(&content) {
-                    if let Some(b) = val.get("sound_enabled").and_then(|v| v.as_bool()) {
+    if let Some(path) = settings_path()
+        && path.is_file()
+            && let Ok(content) = fs::read_to_string(&path)
+                && let Ok(val) = serde_json::from_str::<serde_json::Value>(&content)
+                    && let Some(b) = val.get("sound_enabled").and_then(|v| v.as_bool()) {
                         return b;
                     }
-                }
-            }
-        }
-    }
     true
 }
 
@@ -71,12 +72,7 @@ fn find_sound_file(name: &str) -> Option<PathBuf> {
         Some(Path::new("assets").join("sounds").join(&filename)),
         Some(Path::new("..").join("assets").join("sounds").join(&filename)),
     ];
-    for cand in candidates.into_iter().flatten() {
-        if cand.is_file() {
-            return Some(cand);
-        }
-    }
-    None
+    candidates.into_iter().flatten().find(|cand| cand.is_file())
 }
 
 pub fn play_sound(name: &str) {
