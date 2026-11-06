@@ -10,58 +10,38 @@ permissions:
 
 jobs:
   build-and-release:
-    name: Build Binaries and Create Release
+    name: Build zapret-rs and Create Release
     runs-on: windows-latest
     timeout-minutes: 25
-    env:
-      PYTHONUTF8: "1"
 
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
 
-      # 1. Setup Python & build PySide6 executable
-      - name: Set up Python 3.12
-        uses: actions/setup-python@v5
-        with:
-          python-version: "3.12"
-          cache: "pip"
-
-      - name: Install Python dependencies
-        run: |
-          python -m pip install --upgrade pip
-          pip install -r requirements.txt
-          pip install pyinstaller
-
-      - name: Build PySide6 Executable
-        run: python build_exe.py
-
-      # 2. Setup Rust & build Slint executable
+      # Setup Rust & build zapret-rs release binary
       - name: Set up Rust toolchain
         uses: dtolnay/rust-toolchain@stable
 
-      - name: Build Rust Slint Executable
+      - name: Build zapret-rs Executable
         run: cargo build --release --manifest-path zapret-slint/Cargo.toml
 
-      # 3. Stage release artifacts & generate SHA-256 checksums
+      # Stage release artifacts & generate SHA-256 checksums
       - name: Prepare Release Artifacts
         shell: pwsh
         run: |
           New-Item -ItemType Directory -Force -Path release-dist
-          Copy-Item dist\zapret-simple.exe -Destination release-dist\zapret-simple.exe
-          Copy-Item zapret-slint\target\release\zapret-slint.exe -Destination release-dist\zapret-slint.exe
+          Copy-Item zapret-slint\target\release\zapret-rs.exe -Destination release-dist\zapret-rs.exe
           
           # Generate SHA256
           Get-FileHash release-dist\*.exe -Algorithm SHA256 | ForEach-Object {
             "$($_.Hash.ToLower())  $(Split-Path $_.Path -Leaf)"
           } | Out-File -FilePath release-dist\sha256sums.txt -Encoding ascii
 
-      # 4. Create GitHub Release
+      # Publish GitHub Release
       - name: Publish GitHub Release
         uses: softprops/action-gh-release@v2
         with:
           files: |
-            release-dist/zapret-simple.exe
-            release-dist/zapret-slint.exe
+            release-dist/zapret-rs.exe
             release-dist/sha256sums.txt
           generate_release_notes: true

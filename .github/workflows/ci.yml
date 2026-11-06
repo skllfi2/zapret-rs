@@ -7,73 +7,32 @@ on:
     branches: [ master, main ]
 
 jobs:
-  test:
-    name: Lint, Typecheck and Test
+  rust-check:
+    name: Rust Slint Check & Build
     runs-on: windows-latest
     timeout-minutes: 15
-    env:
-      PYTHONUTF8: "1"
-      QT_QPA_PLATFORM: "offscreen"
-    strategy:
-      matrix:
-        python-version: [ "3.12" ]
 
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
 
-      - name: Set up Python ${{ matrix.python-version }}
-        uses: actions/setup-python@v5
+      - name: Set up Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Rust Cache
+        uses: Swatinem/rust-cache@v2
         with:
-          python-version: ${{ matrix.python-version }}
-          cache: "pip"
+          workspaces: "zapret-slint -> zapret-slint/target"
 
-      - name: Install dependencies
-        run: |
-          python -m pip install --upgrade pip
-          pip install -r requirements.txt
-          pip install -r requirements-dev.txt
+      - name: Cargo Check
+        run: cargo check --manifest-path zapret-slint/Cargo.toml
 
-      - name: Run Ruff Lint
-        run: python -m ruff check .
+      - name: Cargo Build Release
+        run: cargo build --release --manifest-path zapret-slint/Cargo.toml
 
-      - name: Run Mypy Typecheck
-        run: python -m mypy
-
-      - name: Run Unit Tests with Coverage
-        run: |
-          python -W error::ResourceWarning -m coverage run -m unittest discover -s tests -v
-          python -m coverage report --fail-under=90
-
-  build:
-    name: Build Executable Artifact
-    needs: test
-    runs-on: windows-latest
-    timeout-minutes: 15
-    env:
-      PYTHONUTF8: "1"
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-
-      - name: Set up Python 3.12
-        uses: actions/setup-python@v5
-        with:
-          python-version: "3.12"
-          cache: "pip"
-
-      - name: Install dependencies
-        run: |
-          python -m pip install --upgrade pip
-          pip install -r requirements.txt
-          pip install -r requirements-dev.txt
-
-      - name: Build Executable
-        run: python build_exe.py
-
-      - name: Upload zapret-simple.exe
+      - name: Upload zapret-rs Artifact
         uses: actions/upload-artifact@v4
         with:
-          name: zapret-simple-windows
-          path: dist/zapret-simple.exe
+          name: zapret-rs-windows-x64
+          path: zapret-slint/target/release/zapret-rs.exe
           if-no-files-found: error
