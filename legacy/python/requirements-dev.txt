@@ -1,7 +1,0 @@
-# Dev-инструменты zapret-simple (гейты и сборка); runtime — в requirements.txt:
-#   pip install -r requirements-dev.txt
-ruff==0.17.3
-mypy==2.4.0
-coverage==7.17.0
-pyinstaller==6.22.3
-# pywin32 уже в requirements.txt (пин ==312 — проверенная версия API)

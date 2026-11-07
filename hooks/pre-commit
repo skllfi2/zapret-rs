@@ -2,19 +2,4 @@
 # pre-commit hook zapret-rs
 echo "[pre-commit] cargo check zapret-slint ..."
 cargo check --manifest-path zapret-slint/Cargo.toml -q || exit 1
-
-if [ -d "legacy/python/tests" ]; then
-  if [ -z "$PY" ]; then
-    if [ -f "C:/Users/dexox/AppData/Local/Python/pythoncore-3.15-64/python.exe" ]; then
-      PY="C:/Users/dexox/AppData/Local/Python/pythoncore-3.15-64/python.exe"
-    elif command -v py >/dev/null 2>&1; then
-      PY="py -3.15"
-    else
-      PY="python"
-    fi
-  fi
-  echo "[pre-commit] legacy tests check ..."
-  PYTHONUTF8=1 $PY -X utf8 -m unittest discover -s legacy/python/tests -q || true
-fi
-
 echo "[pre-commit] OK"
