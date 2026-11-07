@@ -173,7 +173,7 @@ unsafe extern "system" fn tray_wnd_proc(
                                 0,
                                 MF_BYPOSITION | MF_STRING,
                                 ID_TRAY_OPEN,
-                                w!("Открыть zapret-simple"),
+                                w!("Открыть zapret-rs"),
                             );
                             let _ = InsertMenuW(
                                 hmenu,

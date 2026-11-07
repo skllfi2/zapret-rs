@@ -1302,6 +1302,60 @@ if ($f.ShowDialog() -eq [System.Windows.Forms.DialogResult]::OK) {
         }
     });
 
+    // Скопировать весь отчёт тестирования в буфер обмена
+    let mw_weak_copy_bench = main_window.as_weak();
+    main_window.on_copy_bench_report(move || {
+        let mw = match mw_weak_copy_bench.upgrade() {
+            Some(w) => w,
+            None => return,
+        };
+        let lines_model = mw.get_bench_log_lines();
+        let mut report_text = String::new();
+        for i in 0..lines_model.row_count() {
+            if let Some(line) = lines_model.row_data(i) {
+                report_text.push_str(line.as_str());
+                report_text.push_str("\r\n");
+            }
+        }
+        if !report_text.is_empty() {
+            copy_text_to_clipboard(&report_text);
+            sound::play_sound("done");
+            append_log(&mw, "[+] Полный отчёт тестирования скопирован в буфер обмена Windows!\n");
+        }
+    });
+
+    // Выгрузить отчёт тестирования в файл на Рабочий стол
+    let mw_weak_save_bench = main_window.as_weak();
+    main_window.on_save_bench_report(move || {
+        let mw = match mw_weak_save_bench.upgrade() {
+            Some(w) => w,
+            None => return,
+        };
+        let lines_model = mw.get_bench_log_lines();
+        let mut report_text = String::new();
+        for i in 0..lines_model.row_count() {
+            if let Some(line) = lines_model.row_data(i) {
+                report_text.push_str(line.as_str());
+                report_text.push_str("\r\n");
+            }
+        }
+        if report_text.is_empty() {
+            return;
+        }
+
+        if let Some(desktop) = get_desktop_dir() {
+            let filename = format!("test_results_{}.txt", chrono_timestamp().replace(':', "-").replace(' ', "_"));
+            let file_path = desktop.join(&filename);
+            if std::fs::write(&file_path, report_text).is_ok() {
+                sound::play_sound("done");
+                append_log(&mw, &format!("[+] Отчёт тестирования выгружен в файл:\n    {}\n", file_path.display()));
+            } else {
+                sound::play_sound("alert");
+                append_log(&mw, "[-] Не удалось записать файл отчёта на Рабочий стол.\n");
+            }
+        }
+    });
+
     // Run tests (legacy external test zapret.ps1)
     let mw_weak = main_window.as_weak();
     main_window.on_run_tests(move || {

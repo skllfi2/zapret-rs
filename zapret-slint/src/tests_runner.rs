@@ -109,14 +109,14 @@ pub fn load_targets(orig_dir: &Path) -> Vec<TargetItem> {
     items
 }
 
-/// Выполняет проверку HTTP/TLS через системный curl.exe
+/// Выполняет проверку HTTP/TLS через системный curl.exe в точности как в test zapret.ps1
 fn check_curl_protocol(url: &str, extra_args: &[&str], timeout_sec: u32) -> String {
     let timeout_str = timeout_sec.to_string();
     let mut args = vec![
         "-I",
         "-s",
         "-m", &timeout_str,
-        "--connect-timeout", "1",
+        "--connect-timeout", "2",
         "-o", "NUL",
         "-w", "%{http_code}",
         "--show-error",
@@ -130,15 +130,28 @@ fn check_curl_protocol(url: &str, extra_args: &[&str], timeout_sec: u32) -> Stri
         .output();
 
     if let Ok(out) = output {
-        if out.status.success() {
-            return "OK".to_string();
-        }
         let stderr = String::from_utf8_lossy(&out.stderr).to_lowercase();
-        if stderr.contains("certificate") || stderr.contains("ssl") || stderr.contains("could not resolve") {
+        if stderr.contains("could not resolve host")
+            || stderr.contains("ssl certificate problem")
+            || stderr.contains("self-signed")
+            || stderr.contains("certificate verify failed")
+            || stderr.contains("unable to get local issuer certificate")
+        {
             return "SSL".to_string();
         }
-        if out.status.code() == Some(35) || stderr.contains("not supported") || stderr.contains("unsupported") {
+        if out.status.code() == Some(35)
+            || stderr.contains("does not support")
+            || stderr.contains("not supported")
+            || stderr.contains("unsupported protocol")
+            || stderr.contains("unrecognized option")
+            || stderr.contains("unknown option")
+            || stderr.contains("unsupported option")
+            || stderr.contains("unsupported feature")
+        {
             return "UNSUP".to_string();
+        }
+        if out.status.success() {
+            return "OK".to_string();
         }
     }
     "ERROR".to_string()
@@ -311,8 +324,8 @@ where
             Err(_) => continue,
         };
 
-        // Ожидание готовности winws (600 мс)
-        std::thread::sleep(Duration::from_millis(600));
+        // Ожидание готовности winws и инициализации драйвера WinDivert (1200 мс)
+        std::thread::sleep(Duration::from_millis(1200));
 
         let mut current_strat_res = StrategyBenchmarkResult {
             config_name: format!("{strat}.bat"),

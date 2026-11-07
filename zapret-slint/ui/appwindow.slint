@@ -491,6 +491,8 @@ export component MainWindow inherits Window {
     callback start_native_bench();
     callback cancel_native_bench();
     callback apply_best_strategy();
+    callback copy_bench_report();
+    callback save_bench_report();
 
     callback elevate_admin();
     callback toggle_service();
@@ -2110,10 +2112,15 @@ export component MainWindow inherits Window {
 
                     HorizontalLayout {
                         spacing: 8px;
-                        if !root.bench_in_progress && root.bench_best_strategy != "": WinButton {
+                        if !root.bench_in_progress && root.bench_log_lines.length > 2: WinButton {
                             text: "📋 Скопировать весь отчёт";
                             min_w: 175px;
-                            clicked => { root.copy_log_to_clipboard(); }
+                            clicked => { root.copy_bench_report(); }
+                        }
+                        if !root.bench_in_progress && root.bench_log_lines.length > 2: WinButton {
+                            text: "💾 Выгрузить в файл";
+                            min_w: 150px;
+                            clicked => { root.save_bench_report(); }
                         }
                     }
 
